@@ -1,5 +1,6 @@
 let extractedText = '';
 let uiComponent = null;
+let isUIVisible = false;
 
 // Add this function to check for PDF and extract text immediately
 function initializeExtraction() {
@@ -12,6 +13,37 @@ function initializeExtraction() {
 
 // Call the function immediately when the script is loaded
 initializeExtraction();
+
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "toggleExtraction") {
+    if (isUIVisible) {
+      hideUIComponent();
+    } else {
+      showUIComponent(extractedText);
+    }
+  }
+});
+
+function showUIComponent(text) {
+  if (!uiComponent) {
+    uiComponent = document.createElement('div');
+    uiComponent.id = 'pdf-extractor-ui';
+    uiComponent.innerHTML = `
+      <h2>Extracted Text</h2>
+      <div id="extracted-text">${text}</div>
+    `;
+    document.body.appendChild(uiComponent);
+  }
+  uiComponent.style.display = 'block';
+  isUIVisible = true;
+}
+
+function hideUIComponent() {
+  if (uiComponent) {
+    uiComponent.style.display = 'none';
+    isUIVisible = false;
+  }
+}
 
 function checkForPDFAndExtract() {
   if (document.contentType === 'application/pdf') {
@@ -48,23 +80,6 @@ async function extractTextFromPDF() {
     showUIComponent(extractedText);
   } catch (error) {
     showError('Error extracting text: ' + error.message);
-  }
-}
-
-function showUIComponent(text) {
-  uiComponent = document.createElement('div');
-  uiComponent.id = 'pdf-extractor-ui';
-  uiComponent.innerHTML = `
-    <h2>Extracted Text</h2>
-    <div id="extracted-text">${text}</div>
-  `;
-  document.body.appendChild(uiComponent);
-}
-
-function removeUIComponent() {
-  if (uiComponent) {
-    uiComponent.remove();
-    uiComponent = null;
   }
 }
 
