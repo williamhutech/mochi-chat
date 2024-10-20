@@ -1,15 +1,17 @@
 let extractedText = '';
 let uiComponent = null;
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "toggleExtraction") {
-    if (uiComponent) {
-      removeUIComponent();
-    } else {
-      checkForPDFAndExtract();
-    }
+// Add this function to check for PDF and extract text immediately
+function initializeExtraction() {
+  if (document.contentType === 'application/pdf') {
+    extractTextFromPDF();
+  } else {
+    console.log('This page is not a PDF file.');
   }
-});
+}
+
+// Call the function immediately when the script is loaded
+initializeExtraction();
 
 function checkForPDFAndExtract() {
   if (document.contentType === 'application/pdf') {

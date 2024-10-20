@@ -23,3 +23,17 @@ chrome.runtime.onInstalled.addListener(() => {
     }]
   });
 });
+
+// Add this new listener
+chrome.webNavigation.onCommitted.addListener((details) => {
+  if (details.frameId === 0) {  // Only inject in the main frame
+    chrome.tabs.get(details.tabId, (tab) => {
+      if (tab.url.toLowerCase().includes('.pdf')) {
+        chrome.scripting.executeScript({
+          target: { tabId: details.tabId },
+          files: ['content.js']
+        });
+      }
+    });
+  }
+});
