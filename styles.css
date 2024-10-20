@@ -1,24 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+
 #pdf-extractor-ui {
   position: fixed;
   top: 20px;
+  bottom: 20px;
   right: 20px;
   width: 300px;
-  max-height: 80vh;
+  max-height: calc(100vh - 40px);
   background-color: white;
   border: 1px solid #ccc;
   border-radius: 5px;
   padding: 10px;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   z-index: 9999;
+  font-family: 'Inter', sans-serif;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 
-#pdf-extractor-ui h2 {
-  margin-top: 0;
-}
-
-#extracted-text {
+#output-field {
+  max-height: calc(100vh - 130px); /* Adjust the height to be dynamic based on the viewport */
+  overflow-y: auto;
+  margin-bottom: 10px;
+  border: 1px solid #eee;
+  padding: 10px;
   white-space: pre-wrap;
   word-wrap: break-word;
+  font-family: 'Inter', sans-serif;
+  line-height: 1.4;
+  font-size: 12px;
+}
+
+#output-field p {
+  margin: 0 0 8px 0;
+}
+
+#output-field p:last-child {
+  margin-bottom: 0;
+}
+
+#output-field ul, #output-field ol {
+  margin: 0;
+  padding-left: 20px; /* Adjust as needed for indentation */
+}
+
+#output-field li {
+  margin-top: 1px;
+  margin-bottom: 1px; /* Reduce the space between list items */
+}
+
+#input-container {
+  display: flex;
+  margin-top: 10px;
+}
+
+#prompt-input {
+  flex-grow: 1;
+  margin-right: 5px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+#send-button {
+  white-space: nowrap;
+  padding: 8px 15px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#send-button:hover {
+  background-color: #45a049;
 }
 
 .error {

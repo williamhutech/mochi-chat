@@ -7,7 +7,11 @@
     "activeTab",
     "scripting",
     "declarativeNetRequest",
-    "webNavigation"
+    "webNavigation",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.openai.com/"
   ],
   "background": {
     "service_worker": "background.js"
@@ -16,7 +20,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["marked.min.js", "purify.min.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
     }
