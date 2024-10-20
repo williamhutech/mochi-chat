@@ -1,0 +1,26 @@
+#pdf-extractor-ui {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 300px;
+  max-height: 80vh;
+  background-color: white;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  padding: 10px;
+  overflow-y: auto;
+  z-index: 9999;
+}
+
+#pdf-extractor-ui h2 {
+  margin-top: 0;
+}
+
+#extracted-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.error {
+  color: red;
+}
