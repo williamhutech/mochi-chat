@@ -2,33 +2,32 @@
 
 #pdf-extractor-ui {
   position: fixed;
-  top: 20px;
-  bottom: 20px;
   right: 20px;
-  width: 300px;
-  max-height: calc(100vh - 40px);
-  background-color: white;
+  bottom: 20px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 80vh;
+  background: white;
   border: 1px solid #ccc;
-  border-radius: 5px;
-  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
   display: flex;
   flex-direction: column;
-  z-index: 9999;
+  z-index: 1000;
   font-family: 'Inter', sans-serif;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
 }
 
 #output-field {
-  max-height: calc(100vh - 130px); /* Adjust the height to be dynamic based on the viewport */
+  flex: 1;
   overflow-y: auto;
-  margin-bottom: 10px;
+  padding: 15px;
+  min-height: 100px;
+  max-height: calc(80vh - 100px);
   border: 1px solid #eee;
-  padding: 10px;
-  white-space: pre-wrap;
-  word-wrap: break-word;
   font-family: 'Inter', sans-serif;
   line-height: 1.4;
   font-size: 12px;
+  word-wrap: break-word;
 }
 
 #output-field p {
@@ -50,34 +49,70 @@
 }
 
 #input-container {
+  border-top: 1px solid #eee;
+  padding: 10px;
+  background: #f8f8f8;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
   display: flex;
-  margin-top: 10px;
+  flex-direction: column;
+}
+
+#prompt-wrapper {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 #prompt-input {
-  flex-grow: 1;
-  margin-right: 5px;
-  padding: 8px;
-  border: 1px solid #ccc;
+  flex: 1; /* Allow the input to take up remaining space */
+  padding: 10px;
+  border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 12px; /* Smaller font size for placeholder */
+  box-sizing: border-box;
 }
 
 #send-button {
-  white-space: nowrap;
-  padding: 8px 15px;
-  background-color: #4CAF50;
+  flex: 0 0 auto; /* Allow the button to size itself naturally */
+  padding: 10px 15px; /* Adjust padding to fit within the UI */
+  background: #4CAF50;
   color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px; /* Match font size with the prompt input */
+  box-sizing: border-box;
 }
 
 #send-button:hover {
   background-color: #45a049;
 }
 
+#generating-button {
+  width: 100%;
+  padding: 10px 20px;
+  background: #666;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: not-allowed;
+  font-size: 14px;
+  box-sizing: border-box;
+  display: none;
+}
+
 .error {
   color: red;
+}
+
+.page-link {
+  color: black; /* Change hyperlink color to black */
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.page-link:hover {
+  color: #0D47A1; /* Optional: keep hover effect if desired */
 }

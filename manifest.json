@@ -8,10 +8,14 @@
     "scripting",
     "declarativeNetRequest",
     "webNavigation",
-    "storage"
+    "storage",
+    "downloads",
+    "tabs"
   ],
   "host_permissions": [
-    "https://api.openai.com/"
+    "https://api.openai.com/",
+    "file:///*",
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
@@ -19,7 +23,10 @@
   "action": {},
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "<all_urls>",
+        "file:///*"
+      ],
       "js": ["marked.min.js", "purify.min.js", "content.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
@@ -27,8 +34,12 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["pdf.mjs", "pdf.worker.mjs"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "pdf.mjs",
+        "pdf.worker.mjs",
+        "instructions.html"
+      ],
+      "matches": ["<all_urls>", "file:///*"]
     }
   ]
 }

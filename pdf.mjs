@@ -1563,10 +1563,8 @@ class StatTimer {
 }
 function isValidFetchUrl(url, baseUrl) {
   try {
-    const {
-      protocol
-    } = baseUrl ? new URL(url, baseUrl) : new URL(url);
-    return protocol === "http:" || protocol === "https:";
+    const { protocol } = baseUrl ? new URL(url, baseUrl) : new URL(url);
+    return protocol === "http:" || protocol === "https:" || protocol === "file:";
   } catch {
     return false;
   }

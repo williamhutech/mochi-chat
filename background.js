@@ -2,26 +2,13 @@ chrome.action.onClicked.addListener((tab) => {
   chrome.tabs.sendMessage(tab.id, { action: "toggleExtraction" });
 });
 
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: [1],
-    addRules: [{
-      id: 1,
-      priority: 1,
-      action: {
-        type: 'modifyHeaders',
-        responseHeaders: [{
-          header: 'Content-Security-Policy',
-          operation: 'set',
-          value: "script-src 'self' 'unsafe-eval'; object-src 'self'"
-        }]
-      },
-      condition: {
-        urlFilter: '|https://*',
-        resourceTypes: ['main_frame']
-      }
-    }]
-  });
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    // Create a new tab with instructions
+    chrome.tabs.create({
+      url: chrome.runtime.getURL('instructions.html')
+    });
+  }
 });
 
 // Add this new listener
@@ -32,7 +19,10 @@ chrome.webNavigation.onCommitted.addListener((details) => {
         console.error('Error getting tab:', chrome.runtime.lastError);
         return;
       }
-      if (tab && tab.url && tab.url.toLowerCase().includes('.pdf')) {
+      if (tab && tab.url && (
+          tab.url.toLowerCase().includes('.pdf') || 
+          (tab.url.startsWith('file://') && tab.url.toLowerCase().endsWith('.pdf'))
+      )) {
         chrome.scripting.executeScript({
           target: { tabId: details.tabId },
           files: ['content.js']
@@ -57,6 +47,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ error: error.message });
       });
     return true; // Indicates that the response is sent asynchronously
+  }
+  if (request.action === "openExtensionsPage") {
+    chrome.tabs.create({
+      url: 'chrome://extensions/?id=' + chrome.runtime.id
+    });
+  }
+  if (request.action === "checkFilePermission") {
+    try {
+      chrome.extension.isAllowedFileSchemeAccess((allowed) => {
+        console.log('File access permission:', allowed);
+        if (chrome.runtime.lastError) {
+          console.error('Permission check error:', chrome.runtime.lastError);
+          sendResponse({ hasPermission: false });
+        } else {
+          sendResponse({ hasPermission: allowed });
+        }
+      });
+    } catch (error) {
+      console.error('Permission check exception:', error);
+      sendResponse({ hasPermission: false });
+    }
+    return true;
   }
 });
 
