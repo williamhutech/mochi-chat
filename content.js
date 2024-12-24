@@ -3,20 +3,30 @@ let uiComponent = null;
 let isUIVisible = false;
 let conversationHistory = [];
 let hasCheckedPermission = false;
+let toggleButton = null;
+let lastResponse = ''; // Store the last response
 
 // Add this function to check for PDF and extract text immediately
 async function initializeExtraction() {
-  // Clear previous chat history
+  // Reset all states
   extractedText = '';
   conversationHistory = [];
+  lastResponse = ''; // Clear last response for new page
+  isUIVisible = false;
+
+  // Remove existing UI elements
   if (uiComponent) {
     uiComponent.remove();
     uiComponent = null;
   }
-  isUIVisible = false;
+  if (toggleButton) {
+    toggleButton.remove();
+    toggleButton = null;
+  }
 
   const isPDF = document.contentType === 'application/pdf' || 
                 window.location.href.toLowerCase().endsWith('.pdf');
+  
   if (isPDF) {
     if (window.location.href.startsWith('file://') && !hasCheckedPermission) {
       const hasPermission = await checkFileAccessPermission();
@@ -26,9 +36,62 @@ async function initializeExtraction() {
         return;
       }
     }
-    extractTextFromPDF();
+    await extractTextFromPDF();
+    createToggleButton(); // Create but don't show yet
+    showToggleButton();
   } else {
-    console.log('This page is not a PDF file.');
+    await extractTextFromWebsite();
+    createToggleButton(); // Create but don't show yet
+    showToggleButton();
+  }
+}
+
+// Function to extract text from website
+function extractTextFromWebsite() {
+  try {
+    // Get all text content from the page, excluding scripts and styles
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: function(node) {
+          // Skip if parent is script, style, or hidden
+          const parent = node.parentElement;
+          if (!parent) return NodeFilter.FILTER_REJECT;
+          
+          if (parent.tagName === 'SCRIPT' || 
+              parent.tagName === 'STYLE' || 
+              parent.tagName === 'NOSCRIPT' ||
+              getComputedStyle(parent).display === 'none' ||
+              getComputedStyle(parent).visibility === 'hidden') {
+            return NodeFilter.FILTER_REJECT;
+          }
+          
+          // Accept if node contains non-whitespace
+          return node.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+      }
+    );
+
+    let textContent = '';
+    let node;
+    while (node = walker.nextNode()) {
+      const text = node.textContent.trim();
+      if (text) {
+        textContent += text + '\n';
+      }
+    }
+
+    // Clean up the text
+    extractedText = textContent
+      .replace(/(\n\s*){3,}/g, '\n\n')  // Replace multiple newlines with double newline
+      .trim();
+
+    // Show the UI with extracted text
+    showUIComponent('');
+  } catch (error) {
+    console.error('Error extracting website text:', error);
+    showError('Failed to extract text from the website');
   }
 }
 
@@ -45,26 +108,304 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (isUIVisible) {
       hideUIComponent();
     } else {
-      showUIComponent(extractedText);
+      showUIComponent('');
     }
   }
 });
 
-function showUIComponent(text) {
+function showUIComponent() {
+  const isPDF = document.contentType === 'application/pdf' || 
+                window.location.href.toLowerCase().endsWith('.pdf');
+  const title = isPDF ? 'Mochi - Chat with PDF' : 'Mochi - Chat with Website';
+                
   if (!uiComponent) {
     uiComponent = document.createElement('div');
     uiComponent.id = 'pdf-extractor-ui';
+    uiComponent.style.display = 'none'; // Ensure it starts hidden
+    
+    // Add Noto Sans font
+    const fontLink = document.createElement('link');
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap';
+    fontLink.rel = 'stylesheet';
+    document.head.appendChild(fontLink);
+    
     uiComponent.innerHTML = `
-      <div id="output-field"></div>
-      <div id="input-container">
-        <div id="prompt-wrapper">
-          <input type="text" id="prompt-input" placeholder="Enter your prompt...">
-          <button id="send-button">Send</button>
+      <div id="chat-container">
+        <div id="chat-header">
+          <div id="chat-title">${title}</div>
+          <div class="header-buttons">
+            <button id="expand-button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 3h6v6"></path>
+                <path d="M9 21H3v-6"></path>
+                <path d="M21 3l-7 7"></path>
+                <path d="M3 21l7-7"></path>
+              </svg>
+            </button>
+            <button id="close-button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
         </div>
-        <button id="generating-button" style="display: none;">Generating...</button>
+        <div id="output-field"></div>
+        <div id="input-container">
+          <div id="prompt-wrapper">
+            <input type="text" id="prompt-input" placeholder="What would you like to ask?">
+            <button id="send-button">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </div>
+          <button id="generating-button" style="display: none;">
+            <span class="loading-dots">Generating</span>
+          </button>
+        </div>
       </div>
     `;
     document.body.appendChild(uiComponent);
+    
+    // Add modern styles
+    const style = document.createElement('style');
+    style.textContent = `
+      #chat-toggle-button {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        width: 44px;
+        height: 44px;
+        background: #ffffff;
+        border-radius: 6px;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+        transition: all 0.2s;
+        z-index: 10000;
+        color: #000000;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+      }
+
+      #chat-toggle-button svg {
+        width: 26px;
+        height: 26px;
+      }
+
+      #chat-toggle-button:hover {
+        background: #f9f9f9;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+      }
+
+      #pdf-extractor-ui {
+        position: fixed;
+        bottom: 80px;
+        left: 20px;
+        width: 320px;
+        height: 500px;
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        z-index: 10000;
+        font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        opacity: 0;
+        transform: translateY(20px);
+        transition: all 0.2s ease;
+        display: none;
+        overflow: hidden;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+      }
+
+      #pdf-extractor-ui.expanded {
+        width: 416px;  /* 320px + 30% */
+        height: 650px; /* 500px + 30% */
+      }
+
+      #pdf-extractor-ui.visible {
+        opacity: 1;
+        transform: translateY(0);
+        display: block;
+      }
+
+      #chat-container {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: #ffffff;
+      }
+
+      #chat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+      }
+
+      .header-buttons {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      #chat-title {
+        font-size: 14px;
+        font-weight: 500;
+        color: #000000;
+      }
+
+      #expand-button,
+      #close-button {
+        background: none;
+        border: none;
+        width: 24px;
+        height: 24px;
+        padding: 4px;
+        cursor: pointer;
+        color: #666;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+      }
+
+      #expand-button:hover,
+      #close-button:hover {
+        background: #f5f5f5;
+      }
+
+      #output-field {
+        flex: 1;
+        overflow-y: auto;
+        padding: 14px 16px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: #000000;
+        font-family: 'Noto Sans', sans-serif;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+      }
+
+      #input-container {
+        padding: 14px;
+      }
+
+      #prompt-wrapper {
+        display: flex;
+        gap: 8px;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 6px;
+        padding: 6px 8px;
+        align-items: center;
+      }
+
+      #prompt-input {
+        flex: 1;
+        border: none;
+        background: #ffffff;
+        padding: 6px 0 6px 4px;
+        font-size: 13px;
+        color: #000000;
+        outline: none;
+        font-family: 'Noto Sans', sans-serif;
+      }
+
+      #prompt-input:focus {
+        outline: none;
+        box-shadow: none;
+      }
+
+      #prompt-input::placeholder {
+        color: #999;
+        padding-left: 4px;
+      }
+
+      #send-button {
+        background: none;
+        border: none;
+        color: #000;
+        width: 26px;
+        height: 26px;
+        min-width: 26px;
+        min-height: 26px;
+        padding: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        opacity: 0.8;
+      }
+
+      #send-button:hover {
+        background: #f5f5f5;
+        opacity: 1;
+      }
+
+      #generating-button {
+        width: 100%;
+        padding: 8px;
+        background: #ffffff;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 6px;
+        color: #666;
+        font-size: 13px;
+        margin-top: 8px;
+        cursor: wait;
+        font-family: 'Noto Sans', sans-serif;
+      }
+
+      /* Markdown content styling */
+      #output-field p {
+        margin: 0 0 10px 0;
+        font-family: 'Noto Sans', sans-serif;
+      }
+
+      #output-field ul, #output-field ol {
+        margin: 0 0 10px 0;
+        padding-left: 20px;
+      }
+
+      #output-field ul li, #output-field ol li {
+        margin-bottom: 4px;
+        line-height: 1.5;
+      }
+
+      #output-field ul {
+        list-style-type: disc;
+      }
+
+      #output-field ol {
+        list-style-type: decimal;
+      }
+
+      #output-field code {
+        background: rgba(0, 0, 0, 0.03);
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace;
+        font-size: 12px;
+      }
+
+      #output-field pre {
+        background: rgba(0, 0, 0, 0.03);
+        padding: 10px;
+        border-radius: 6px;
+        overflow-x: auto;
+        margin-bottom: 10px;
+      }
+
+      #output-field pre code {
+        background: none;
+        padding: 0;
+      }
+    `;
+    document.head.appendChild(style);
     
     document.getElementById('send-button').addEventListener('click', sendPrompt);
     document.getElementById('prompt-input').addEventListener('keypress', function(event) {
@@ -72,20 +413,68 @@ function showUIComponent(text) {
         sendPrompt();
       }
     });
+    document.getElementById('close-button').addEventListener('click', hideUIComponent);
+    document.getElementById('expand-button').addEventListener('click', toggleExpand);
+  } else {
+    // Update the title if UI already exists
+    document.getElementById('chat-title').textContent = title;
   }
   
-  // Initialize empty output field instead of showing extracted text
+  // Show the last response if it exists, otherwise initialize empty
   const outputField = document.getElementById('output-field');
-  outputField.innerHTML = '';
+  outputField.innerHTML = lastResponse || '';
   
+  // Show with animation
   uiComponent.style.display = 'block';
+  // Trigger reflow
+  uiComponent.offsetHeight;
+  uiComponent.classList.add('visible');
   isUIVisible = true;
+}
+
+function toggleExpand() {
+  if (uiComponent) {
+    uiComponent.classList.toggle('expanded');
+  }
 }
 
 function hideUIComponent() {
   if (uiComponent) {
-    uiComponent.style.display = 'none';
+    // Save the current response before hiding
+    lastResponse = document.getElementById('output-field').innerHTML;
+    uiComponent.classList.remove('visible');
+    setTimeout(() => {
+      uiComponent.style.display = 'none';
+    }, 200);
     isUIVisible = false;
+  }
+}
+
+function createToggleButton() {
+  if (!toggleButton) {
+    toggleButton = document.createElement('div');
+    toggleButton.id = 'chat-toggle-button';
+    toggleButton.style.display = 'none'; // Ensure it starts hidden
+    toggleButton.innerHTML = `
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+    `;
+    document.body.appendChild(toggleButton);
+
+    toggleButton.addEventListener('click', () => {
+      if (isUIVisible) {
+        hideUIComponent();
+      } else {
+        showUIComponent();
+      }
+    });
+  }
+}
+
+function showToggleButton() {
+  if (toggleButton) {
+    toggleButton.style.display = 'flex';
   }
 }
 
@@ -141,7 +530,7 @@ async function showFileAccessInstructions() {
     box-shadow: 0 4px 20px rgba(0,0,0,0.15);
     z-index: 10000;
     max-width: 450px;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Noto Sans', sans-serif;
   `;
   
   instructionsDiv.innerHTML = `
@@ -303,7 +692,7 @@ Main instruction/ask: `;
 
   // Only display the user's prompt in the UI
   const outputField = document.getElementById('output-field');
-  outputField.innerHTML += `<strong>ChatPDF:</strong> ${DOMPurify.sanitize(prompt)}<br><br>`;
+  outputField.innerHTML += `${DOMPurify.sanitize(prompt)}<br><br>`;
   
   // Clear input after sending
   promptInput.value = '';
@@ -404,6 +793,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 function renderMarkdown(text) {
+  marked.setOptions({
+    gfm: true,
+    breaks: true,
+    headerIds: false,
+    mangle: false
+  });
   return marked.parse(text);
 }
 
@@ -417,4 +812,33 @@ function createPageLinks(text) {
   });
   console.log('Text with links:', linkedText);
   return linkedText;
+}
+
+// Create toggle button when needed
+function createToggleButton() {
+  if (!toggleButton) {
+    toggleButton = document.createElement('div');
+    toggleButton.id = 'chat-toggle-button';
+    toggleButton.style.display = 'none'; // Ensure it starts hidden
+    toggleButton.innerHTML = `
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+    `;
+    document.body.appendChild(toggleButton);
+
+    toggleButton.addEventListener('click', () => {
+      if (isUIVisible) {
+        hideUIComponent();
+      } else {
+        showUIComponent();
+      }
+    });
+  }
+}
+
+function showToggleButton() {
+  if (toggleButton) {
+    toggleButton.style.display = 'flex';
+  }
 }
