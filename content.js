@@ -1,106 +1,32 @@
-let extractedText = '';
+// Initialize variables
 let uiComponent = null;
-let isUIVisible = false;
-let conversationHistory = [];
-let hasCheckedPermission = false;
 let toggleButton = null;
-let lastResponse = ''; // Store the last response
+let isUIVisible = false;
+let extractedText = '';
+let conversationHistory = [];
+let lastResponse = '';
+let hasCheckedPermission = false;
+let isTextExtracted = false;
 
-// Add this function to check for PDF and extract text immediately
-async function initializeExtraction() {
-  // Reset all states
-  extractedText = '';
-  conversationHistory = [];
-  lastResponse = ''; // Clear last response for new page
-  isUIVisible = false;
+// Create and show chat button immediately
+createAndShowChatButton();
 
-  // Remove existing UI elements
-  if (uiComponent) {
-    uiComponent.remove();
-    uiComponent = null;
-  }
-  if (toggleButton) {
-    toggleButton.remove();
-    toggleButton = null;
-  }
-
-  const isPDF = document.contentType === 'application/pdf' || 
-                window.location.href.toLowerCase().endsWith('.pdf');
-  
-  if (isPDF) {
-    if (window.location.href.startsWith('file://') && !hasCheckedPermission) {
-      const hasPermission = await checkFileAccessPermission();
-      hasCheckedPermission = true;
-      if (!hasPermission) {
-        showFileAccessInstructions();
-        return;
-      }
-    }
-    await extractTextFromPDF();
-    createToggleButton(); // Create but don't show yet
-    showToggleButton();
-  } else {
-    await extractTextFromWebsite();
-    createToggleButton(); // Create but don't show yet
-    showToggleButton();
-  }
-}
-
-// Function to extract text from website
-function extractTextFromWebsite() {
-  try {
-    // Get all text content from the page, excluding scripts and styles
-    const walker = document.createTreeWalker(
-      document.body,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: function(node) {
-          // Skip if parent is script, style, or hidden
-          const parent = node.parentElement;
-          if (!parent) return NodeFilter.FILTER_REJECT;
-          
-          if (parent.tagName === 'SCRIPT' || 
-              parent.tagName === 'STYLE' || 
-              parent.tagName === 'NOSCRIPT' ||
-              getComputedStyle(parent).display === 'none' ||
-              getComputedStyle(parent).visibility === 'hidden') {
-            return NodeFilter.FILTER_REJECT;
-          }
-          
-          // Accept if node contains non-whitespace
-          return node.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-        }
-      }
-    );
-
-    let textContent = '';
-    let node;
-    while (node = walker.nextNode()) {
-      const text = node.textContent.trim();
-      if (text) {
-        textContent += text + '\n';
-      }
-    }
-
-    // Clean up the text
-    extractedText = textContent
-      .replace(/(\n\s*){3,}/g, '\n\n')  // Replace multiple newlines with double newline
-      .trim();
-
-    // Show the UI with extracted text
-    showUIComponent('');
-  } catch (error) {
-    console.error('Error extracting website text:', error);
-    showError('Failed to extract text from the website');
-  }
-}
-
-// Call the function immediately when the script is loaded
-initializeExtraction();
-
-// Add event listener for page unload to reinitialize on refresh
+// Add event listener for page unload to reinitialize
 window.addEventListener('beforeunload', () => {
-  setTimeout(initializeExtraction, 0);
+  setTimeout(() => {
+    // Recreate chat button if needed
+    createAndShowChatButton();
+  }, 0);
+});
+
+// Ensure chat button is created when extension is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  createAndShowChatButton();
+});
+
+// Additional listener for dynamic page loads
+window.addEventListener('load', () => {
+  createAndShowChatButton();
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -108,10 +34,88 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (isUIVisible) {
       hideUIComponent();
     } else {
-      showUIComponent('');
+      // Extract text if not already done
+      if (!isTextExtracted) {
+        initializeExtraction().then(() => {
+          showUIComponent();
+        });
+      } else {
+        showUIComponent();
+      }
     }
   }
 });
+
+// Function to ensure chat button is always visible
+function createAndShowChatButton() {
+  if (!toggleButton) {
+    createToggleButton();
+  }
+  if (toggleButton && toggleButton.style.display !== 'flex') {
+    toggleButton.style.display = 'flex';
+  }
+}
+
+// Create toggle button when needed
+function createToggleButton() {
+  if (!toggleButton) {
+    toggleButton = document.createElement('div');
+    toggleButton.id = 'chat-toggle-button';
+    toggleButton.innerHTML = `
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+    `;
+    document.body.appendChild(toggleButton);
+
+    toggleButton.addEventListener('click', async () => {
+      if (isUIVisible) {
+        hideUIComponent();
+      } else {
+        // Extract text if not already done
+        if (!isTextExtracted) {
+          await initializeExtraction();
+        }
+        showUIComponent();
+      }
+    });
+
+    // Show the button immediately
+    toggleButton.style.display = 'flex';
+  }
+}
+
+async function initializeExtraction() {
+  // Only extract text if not already done
+  if (isTextExtracted) return;
+
+  // Reset conversation states
+  extractedText = '';
+  conversationHistory = [];
+  
+  const isPDF = document.contentType === 'application/pdf' || 
+                window.location.href.toLowerCase().endsWith('.pdf');
+  
+  try {
+    if (isPDF) {
+      if (window.location.href.startsWith('file://') && !hasCheckedPermission) {
+        const hasPermission = await checkFileAccessPermission();
+        hasCheckedPermission = true;
+        if (!hasPermission) {
+          showFileAccessInstructions();
+          return;
+        }
+      }
+      await extractTextFromPDF();
+    } else {
+      await extractTextFromWebsite();
+    }
+    isTextExtracted = true;
+  } catch (error) {
+    console.error('Error extracting text:', error);
+    showError('Failed to extract text from the document');
+  }
+}
 
 function showUIComponent() {
   const isPDF = document.contentType === 'application/pdf' || 
@@ -180,7 +184,7 @@ function showUIComponent() {
         height: 44px;
         background: #ffffff;
         border-radius: 6px;
-        display: none;
+        display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
@@ -200,6 +204,36 @@ function showUIComponent() {
         background: #f9f9f9;
         transform: translateY(-1px);
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+      }
+
+      #expand-button,
+      #close-button {
+        background: none;
+        border: none;
+        width: 26px;
+        height: 26px;
+        min-width: 26px;
+        min-height: 26px;
+        padding: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        opacity: 0.8;
+        margin-left: 4px;
+      }
+
+      #expand-button:hover,
+      #close-button:hover {
+        background: #f5f5f5;
+        opacity: 1;
+      }
+
+      .header-buttons {
+        display: flex;
+        gap: 4px;
+        align-items: center;
       }
 
       #pdf-extractor-ui {
@@ -247,36 +281,10 @@ function showUIComponent() {
         border-bottom: 1px solid rgba(0, 0, 0, 0.04);
       }
 
-      .header-buttons {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-
       #chat-title {
         font-size: 14px;
         font-weight: 500;
         color: #000000;
-      }
-
-      #expand-button,
-      #close-button {
-        background: none;
-        border: none;
-        width: 24px;
-        height: 24px;
-        padding: 4px;
-        cursor: pointer;
-        color: #666;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-      }
-
-      #expand-button:hover,
-      #close-button:hover {
-        background: #f5f5f5;
       }
 
       #output-field {
@@ -447,34 +455,6 @@ function hideUIComponent() {
       uiComponent.style.display = 'none';
     }, 200);
     isUIVisible = false;
-  }
-}
-
-function createToggleButton() {
-  if (!toggleButton) {
-    toggleButton = document.createElement('div');
-    toggleButton.id = 'chat-toggle-button';
-    toggleButton.style.display = 'none'; // Ensure it starts hidden
-    toggleButton.innerHTML = `
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-      </svg>
-    `;
-    document.body.appendChild(toggleButton);
-
-    toggleButton.addEventListener('click', () => {
-      if (isUIVisible) {
-        hideUIComponent();
-      } else {
-        showUIComponent();
-      }
-    });
-  }
-}
-
-function showToggleButton() {
-  if (toggleButton) {
-    toggleButton.style.display = 'flex';
   }
 }
 
@@ -814,31 +794,51 @@ function createPageLinks(text) {
   return linkedText;
 }
 
-// Create toggle button when needed
-function createToggleButton() {
-  if (!toggleButton) {
-    toggleButton = document.createElement('div');
-    toggleButton.id = 'chat-toggle-button';
-    toggleButton.style.display = 'none'; // Ensure it starts hidden
-    toggleButton.innerHTML = `
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-      </svg>
-    `;
-    document.body.appendChild(toggleButton);
-
-    toggleButton.addEventListener('click', () => {
-      if (isUIVisible) {
-        hideUIComponent();
-      } else {
-        showUIComponent();
+// Function to extract text from website
+function extractTextFromWebsite() {
+  try {
+    // Get all text content from the page, excluding scripts and styles
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: function(node) {
+          // Skip if parent is script, style, or hidden
+          const parent = node.parentElement;
+          if (!parent) return NodeFilter.FILTER_REJECT;
+          
+          if (parent.tagName === 'SCRIPT' || 
+              parent.tagName === 'STYLE' || 
+              parent.tagName === 'NOSCRIPT' ||
+              getComputedStyle(parent).display === 'none' ||
+              getComputedStyle(parent).visibility === 'hidden') {
+            return NodeFilter.FILTER_REJECT;
+          }
+          
+          // Accept if node contains non-whitespace
+          return node.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
       }
-    });
-  }
-}
+    );
 
-function showToggleButton() {
-  if (toggleButton) {
-    toggleButton.style.display = 'flex';
+    let textContent = '';
+    let node;
+    while (node = walker.nextNode()) {
+      const text = node.textContent.trim();
+      if (text) {
+        textContent += text + '\n';
+      }
+    }
+
+    // Clean up the text
+    extractedText = textContent
+      .replace(/(\n\s*){3,}/g, '\n\n')  // Replace multiple newlines with double newline
+      .trim();
+
+    // Show the UI with extracted text
+    showUIComponent('');
+  } catch (error) {
+    console.error('Error extracting website text:', error);
+    showError('Failed to extract text from the website');
   }
 }
