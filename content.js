@@ -11,6 +11,25 @@ let isTextExtracted = false;
 // Create and show chat button immediately
 createAndShowChatButton();
 
+// Add keyboard shortcut for Command+K
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey && e.key === 'k') {
+    e.preventDefault();
+    e.stopPropagation();  // Stop event from bubbling up
+    if (isUIVisible) {
+      hideUIComponent();
+    } else {
+      if (!isTextExtracted) {
+        initializeExtraction().then(() => {
+          showUIComponent();
+        });
+      } else {
+        showUIComponent();
+      }
+    }
+  }
+});
+
 // Add event listener for page unload to reinitialize
 window.addEventListener('beforeunload', () => {
   setTimeout(() => {
@@ -120,7 +139,7 @@ async function initializeExtraction() {
 function showUIComponent() {
   const isPDF = document.contentType === 'application/pdf' || 
                 window.location.href.toLowerCase().endsWith('.pdf');
-  const title = isPDF ? 'Mochi - Chat with PDF' : 'Mochi - Chat with Website';
+  const title = isPDF ? 'Mochi Chat - PDF' : 'Mochi Chat - Website';
                 
   if (!uiComponent) {
     uiComponent = document.createElement('div');
@@ -166,12 +185,46 @@ function showUIComponent() {
             </button>
           </div>
           <button id="generating-button" style="display: none;">
-            <span class="loading-dots">Generating</span>
+            <span class="loading-dots">Thinking</span>
           </button>
         </div>
       </div>
     `;
     document.body.appendChild(uiComponent);
+
+    // Add event listeners for buttons
+    document.getElementById('expand-button').addEventListener('click', () => {
+      const isExpanded = uiComponent.classList.contains('expanded');
+      
+      if (isExpanded) {
+        requestAnimationFrame(() => {
+          uiComponent.style.width = '320px';
+          uiComponent.style.height = '500px';
+          uiComponent.classList.remove('expanded');
+        });
+      } else {
+        requestAnimationFrame(() => {
+          uiComponent.style.width = '416px';  // 320px + 30%
+          uiComponent.style.height = '650px';  // 500px + 30%
+          uiComponent.classList.add('expanded');
+        });
+      }
+    });
+
+    document.getElementById('close-button').addEventListener('click', () => {
+      hideUIComponent();
+    });
+
+    // Add event listener for input
+    const promptInput = document.getElementById('prompt-input');
+    promptInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendPrompt();
+      }
+    });
+
+    document.getElementById('send-button').addEventListener('click', sendPrompt);
     
     // Add modern styles
     const style = document.createElement('style');
@@ -222,6 +275,7 @@ function showUIComponent() {
         border-radius: 4px;
         opacity: 0.8;
         margin-left: 4px;
+        transition: all 0.2s ease;
       }
 
       #expand-button:hover,
@@ -432,12 +486,13 @@ function showUIComponent() {
   const outputField = document.getElementById('output-field');
   outputField.innerHTML = lastResponse || '';
   
-  // Show with animation
-  uiComponent.style.display = 'block';
-  // Trigger reflow
-  uiComponent.offsetHeight;
-  uiComponent.classList.add('visible');
-  isUIVisible = true;
+  if (!isUIVisible) {
+    uiComponent.style.display = 'block';
+    uiComponent.classList.add('visible');
+    isUIVisible = true;
+    // Focus on input field when UI is shown
+    document.getElementById('prompt-input').focus();
+  }
 }
 
 function toggleExpand() {
@@ -453,6 +508,8 @@ function hideUIComponent() {
     uiComponent.classList.remove('visible');
     setTimeout(() => {
       uiComponent.style.display = 'none';
+      // Remove expanded class when hiding
+      uiComponent.classList.remove('expanded');
     }, 200);
     isUIVisible = false;
   }
@@ -515,10 +572,10 @@ async function showFileAccessInstructions() {
   
   instructionsDiv.innerHTML = `
     <h3 style="margin-top: 0; color: #2c3e50;">Permission Required</h3>
-    <p>PDF Text Extractor needs permission to access local PDF files.</p>
+    <p>Mochi Chat needs permission to access local PDF files.</p>
     <ol style="margin-bottom: 20px;">
       <li>Click the button below to open Extensions page</li>
-      <li>Find "PDF Text Extractor"</li>
+      <li>Find "Mochi Chat"</li>
       <li>Click "Details"</li>
       <li>Toggle on "Allow access to file URLs"</li>
       <li>Refresh this page</li>
@@ -648,12 +705,18 @@ function showError(message) {
 
 function sendPrompt() {
   const promptInput = document.getElementById('prompt-input');
-  const prompt = promptInput.value;
+  const prompt = promptInput.value.trim();  // Add trim() to remove whitespace
+  
+  // Check if prompt is empty or only whitespace
+  if (!prompt) {
+    return;  // Don't send empty prompts
+  }
+
   let fullPrompt;
 
   if (conversationHistory.length === 0) {
     const prePrompt = `
-Based on the extracted PDF text above:
+Based on the extracted text above:
 - **Provide a straightforward, concise response**
 - Use bullet points or numbering when appropriate
 - Only when asked about a specific page, provide a response based on the page text alone.
@@ -663,36 +726,33 @@ Based on the extracted PDF text above:
 Main instruction/ask: `;
     fullPrompt = extractedText + '\n\n' + prePrompt + prompt;
     
-    // Add PDF text and pre-prompt to conversation history, but don't display them
+    // Add text and pre-prompt to conversation history, but don't display them
     conversationHistory.push({ role: 'system', content: extractedText });
     conversationHistory.push({ role: 'system', content: prePrompt });
   } else {
     fullPrompt = `user: ${prompt}`;
   }
 
-  // Only display the user's prompt in the UI
-  const outputField = document.getElementById('output-field');
-  outputField.innerHTML += `${DOMPurify.sanitize(prompt)}<br><br>`;
-  
-  // Clear input after sending
+  // Clear input and hide prompt wrapper immediately
   promptInput.value = '';
-  
-  console.log('Sending prompt to background script:', fullPrompt);
-  
+  document.getElementById('prompt-wrapper').style.display = 'none';
+  document.getElementById('generating-button').style.display = 'block';
+  document.getElementById('generating-button').textContent = 'Munching...';
+
+  // Add user message to conversation history
+  conversationHistory.push({ role: 'user', content: prompt });
+
   chrome.runtime.sendMessage({
     action: "generateResponse",
     prompt: fullPrompt,
     history: conversationHistory
   }, response => {
     if (chrome.runtime.lastError) {
-      console.error('Error sending message:', chrome.runtime.lastError);
-      outputField.innerHTML += `<span class="error">Error: ${chrome.runtime.lastError.message}</span>`;
-    } else {
-      console.log('Message sent successfully, response:', response);
+      console.error('Error:', chrome.runtime.lastError);
+      document.getElementById('prompt-wrapper').style.display = 'flex';
+      document.getElementById('generating-button').style.display = 'none';
     }
   });
-  
-  promptInput.value = '';
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -702,13 +762,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const promptWrapper = document.getElementById('prompt-wrapper');
     const generatingButton = document.getElementById('generating-button');
     const promptInput = document.getElementById('prompt-input');
-
-    if (!request.isFinal) {
-      // Hide input and show generating button while streaming
-      promptWrapper.style.display = 'none';
-      generatingButton.style.display = 'block';
-      generatingButton.textContent = 'Generating...';
-    }
 
     if (request.error) {
       console.error('Error:', request.error);
@@ -726,47 +779,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         generatingButton.style.display = 'none';
         conversationHistory.push({ role: 'system', content: request.text });
         
-        // Focus on the input field and clear its value
-        promptInput.value = '';
+        // Focus on the input field
         promptInput.focus();
-        
-        // Add click handlers for page links with immediate execution
-        outputField.querySelectorAll('.page-link').forEach(link => {
-          link.addEventListener('click', async (e) => {
-            e.preventDefault();
-            const pageNum = parseInt(e.target.dataset.page);
-            console.log('Page link clicked:', pageNum);
-            
-            try {
-              // For Chrome/Brave built-in viewer
-              const viewer = document.querySelector('embed[type="application/pdf"]');
-              if (viewer) {
-                // Try to get the viewer's parent window
-                const viewerParent = viewer.closest('html');
-                if (viewerParent && viewerParent.PDFViewerApplication) {
-                  viewerParent.PDFViewerApplication.pdfViewer.scrollPageIntoView({ pageNumber: pageNum });
-                  return;
-                }
-              }
-
-              // Try accessing the viewer directly
-              if (PDFViewerApplication) {
-                PDFViewerApplication.pdfViewer.scrollPageIntoView({ pageNumber: pageNum });
-                return;
-              }
-
-              // Fallback to URL hash
-              const currentUrl = window.location.href.split('#')[0];
-              window.location.href = `${currentUrl}#page=${pageNum}`;
-              
-            } catch (error) {
-              console.error('Error navigating to page:', error);
-              // Final fallback - reload with hash
-              const currentUrl = window.location.href.split('#')[0];
-              window.location.href = `${currentUrl}#page=${pageNum}`;
-            }
-          });
-        });
       }
     }
   }

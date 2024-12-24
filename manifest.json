@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "PDF Text Extractor",
+  "name": "Mochi Chat",
   "version": "1.0",
-  "description": "Extract text from PDF files and display it in a UI component",
+  "description": "Chat with your PDFs and websites using AI",
   "permissions": [
     "activeTab",
     "scripting",
