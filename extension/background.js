@@ -1,13 +1,13 @@
 // Debug log for background script initialization
-console.log('[Mochi] Background script initialized');
+console.log('[Mochi-Background] Background script initialized');
 
 chrome.action.onClicked.addListener((tab) => {
-  console.log('[Mochi] Extension icon clicked for tab:', tab.id);
+  console.log('[Mochi-Background] Extension icon clicked for tab:', tab.id);
   chrome.tabs.sendMessage(tab.id, { action: "toggleExtraction" });
 });
 
 chrome.runtime.onInstalled.addListener((details) => {
-  console.log('[Mochi] Extension installed/updated:', details.reason);
+  console.log('[Mochi-Background] Extension installed/updated:', details.reason);
   if (details.reason === 'install') {
     // Create a new tab with instructions
     chrome.tabs.create({
@@ -16,34 +16,11 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
-// Add this new listener
-chrome.webNavigation.onCommitted.addListener((details) => {
-  if (details.frameId === 0) {  // Only inject in the main frame
-    chrome.tabs.get(details.tabId, (tab) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error getting tab:', chrome.runtime.lastError);
-        return;
-      }
-      if (tab && tab.url && (
-          tab.url.toLowerCase().includes('.pdf') || 
-          (tab.url.startsWith('file://') && tab.url.toLowerCase().endsWith('.pdf'))
-      )) {
-        chrome.scripting.executeScript({
-          target: { tabId: details.tabId },
-          files: ['content.js']
-        });
-      }
-    });
-  }
-});
-
 // Listen for tab updates to ensure chat button is always visible
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  console.log('[Mochi] Tab updated:', { tabId, status: changeInfo.status, url: tab.url });
-  
   // Skip if URL is undefined or empty
   if (!tab.url) {
-    console.log('[Mochi] Skipping undefined URL');
+    console.log('[Mochi-Background] Skipping undefined URL for tab:', tabId);
     return;
   }
 
@@ -51,32 +28,43 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (tab.url.startsWith('chrome://') || 
       tab.url.startsWith('chrome-extension://') || 
       tab.url.startsWith('devtools://')) {
-    console.log('[Mochi] Skipping restricted URL:', tab.url);
+    console.log('[Mochi-Background] Skipping restricted URL:', tab.url, 'for tab:', tabId);
     return;
   }
 
   if (changeInfo.status === 'complete') {
-    console.log('[Mochi] Tab load complete, injecting chat button for tab:', tabId);
+    console.log('[Mochi-Background] Tab load complete, injecting for tab:', tabId);
     
     try {
       // First, check if we can access the tab
       await chrome.tabs.get(tabId);
       
       // Create a separate function for injection
-      async function injectChatButton() {
-        console.log('[Mochi] Creating chat button');
+      function injectChatButton() {
+        // Send a message back to background script for logging
+        chrome.runtime.sendMessage({ 
+          action: "logFromContent", 
+          message: `Injecting chat button for tab ${tabId}`
+        });
+
         let toggleButton = document.getElementById('chat-toggle-button');
         
         if (!toggleButton) {
           toggleButton = document.createElement('div');
           toggleButton.id = 'chat-toggle-button';
           document.body.appendChild(toggleButton);
-          console.log('[Mochi] Chat button created');
+          chrome.runtime.sendMessage({ 
+            action: "logFromContent", 
+            message: `Created chat button for tab ${tabId}`
+          });
         }
 
         // Ensure button is visible
         toggleButton.style.display = 'flex';
-        console.log('[Mochi] Ensuring button visibility');
+        chrome.runtime.sendMessage({ 
+          action: "logFromContent", 
+          message: `Ensured button visibility for tab ${tabId}`
+        });
       }
 
       // Execute the injection
@@ -85,69 +73,79 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         func: injectChatButton
       });
       
-      console.log('[Mochi] Chat button injection successful for tab:', tabId);
+      console.log('[Mochi-Background] Chat button injection successful for tab:', tabId);
     } catch (err) {
-      console.error('[Mochi] Error during chat button injection:', err);
+      console.error('[Mochi-Background] Error during chat button injection:', err, 'for tab:', tabId);
     }
+  }
+});
+
+// Handle logs from content script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === "logFromContent") {
+    console.log(`[Mochi-Content] ${request.message}`);
   }
 });
 
 // Listen for keyboard command
 chrome.commands.onCommand.addListener((command) => {
+  console.log('[Mochi-Background] Keyboard command received:', command);
   if (command === "toggle-chat") {
-    // Send message to content script to toggle chat
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-      chrome.tabs.sendMessage(tabs[0].id, {action: "toggleExtraction"});
+      if (tabs[0]) {
+        console.log('[Mochi-Background] Sending toggle message to tab:', tabs[0].id);
+        chrome.tabs.sendMessage(tabs[0].id, {action: "toggleExtraction"});
+      } else {
+        console.error('[Mochi-Background] No active tab found for keyboard command');
+      }
     });
   }
 });
 
 //OpenAI API Key
-const API_KEY = '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'; // Replace with your actual API key
+const API_KEY = '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';
 
+// Handle chat messages
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "generateResponse") {
-    console.log('Received generateResponse request in background script:', request);
+    console.log('[Mochi-Background] Received generateResponse request in background script:', request);
     generateChatGPTResponse(request.prompt, sender, request.history)
       .then(result => {
-        console.log('ChatGPT response generated:', result);
+        console.log('[Mochi-Background] ChatGPT response generated:', result);
         sendResponse({ success: true, result: result });
       })
       .catch(error => {
-        console.error('Error generating ChatGPT response:', error);
+        console.error('[Mochi-Background] Error generating ChatGPT response:', error);
         sendResponse({ error: error.message });
       });
     return true; // Indicates that the response is sent asynchronously
-  }
-  if (request.action === "openExtensionsPage") {
-    chrome.tabs.create({
-      url: 'chrome://extensions/?id=' + chrome.runtime.id
-    });
-  }
-  if (request.action === "checkFilePermission") {
+  } else if (request.action === "checkFilePermission") {
     try {
-      chrome.extension.isAllowedFileSchemeAccess((allowed) => {
-        console.log('File access permission:', allowed);
+      chrome.extension.isAllowedFileSchemeAccess((isAllowed) => {
+        console.log('[Mochi-Background] File access permission:', isAllowed);
         if (chrome.runtime.lastError) {
-          console.error('Permission check error:', chrome.runtime.lastError);
+          console.error('[Mochi-Background] Permission check error:', chrome.runtime.lastError);
           sendResponse({ hasPermission: false });
         } else {
-          sendResponse({ hasPermission: allowed });
+          sendResponse({ hasPermission: isAllowed });
         }
       });
     } catch (error) {
-      console.error('Permission check exception:', error);
+      console.error('[Mochi-Background] Permission check exception:', error);
       sendResponse({ hasPermission: false });
     }
     return true;
+  } else if (request.action === "openExtensionsPage") {
+    chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
   }
 });
 
+// Function to generate chat response
 async function generateChatGPTResponse(prompt, sender, history) {
   const url = 'https://api.openai.com/v1/chat/completions';
 
   try {
-    console.log('Sending request to ChatGPT API with prompt:', prompt);
+    console.log('[Mochi-Background] Sending request to ChatGPT API with prompt:', prompt);
     const messages = history.map(msg => ({ role: msg.role, content: msg.content }));
     messages.push({ role: 'user', content: prompt });
 
@@ -160,13 +158,14 @@ async function generateChatGPTResponse(prompt, sender, history) {
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: messages,
-        stream: true
+        stream: true,
+        stream_options: {"include_usage": true}
       })
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('API response not OK:', response.status, errorText);
+      console.error('[Mochi-Background] API response not OK:', response.status, errorText);
       throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
 
@@ -177,7 +176,7 @@ async function generateChatGPTResponse(prompt, sender, history) {
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
-        console.log('Stream complete');
+        console.log('[Mochi-Background] Stream complete');
         break;
       }
       
@@ -185,30 +184,44 @@ async function generateChatGPTResponse(prompt, sender, history) {
       const lines = chunk.split('\n');
       
       for (const line of lines) {
-        if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+        if (line.startsWith('data: ')) {
           try {
-            const data = JSON.parse(line.slice(6));
-            if (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.content) {
+            const jsonData = line.slice(6); // Remove 'data: ' prefix
+            if (jsonData === '[DONE]') continue;
+            
+            const data = JSON.parse(jsonData);
+            
+            // Handle content delta
+            if (data.choices?.[0]?.delta?.content) {
               const textChunk = data.choices[0].delta.content;
               accumulatedResponse += textChunk;
-              console.log('Processed text chunk:', textChunk);
-              console.log('Current accumulated response:', accumulatedResponse);
+              console.log('[Mochi-Background] Processed text chunk:', textChunk);
+              
               chrome.tabs.sendMessage(sender.tab.id, { 
                 action: "updateStreamingResponse", 
                 text: accumulatedResponse,
-                chunk: textChunk
+                isFinal: false
               });
             }
+            
+            // Handle usage information if present
+            if (data.usage) {
+              console.log('[Mochi-Background] Token usage:', data.usage);
+            }
           } catch (error) {
-            console.error('Error parsing streaming data:', error, 'Raw line:', line);
+            // Log the problematic line for debugging
+            console.error('[Mochi-Background] Error parsing streaming data:', error);
+            console.error('[Mochi-Background] Problematic line:', line);
+            // Continue processing other lines instead of breaking
+            continue;
           }
         }
       }
     }
 
-    console.log('Full accumulated response:', accumulatedResponse);
+    console.log('[Mochi-Background] Full accumulated response:', accumulatedResponse);
 
-    // Send a final message with the complete response
+    // Send final message with complete response
     chrome.tabs.sendMessage(sender.tab.id, { 
       action: "updateStreamingResponse", 
       text: accumulatedResponse,
@@ -217,8 +230,11 @@ async function generateChatGPTResponse(prompt, sender, history) {
 
     return accumulatedResponse;
   } catch (error) {
-    console.error('Error in generateChatGPTResponse:', error);
-    chrome.tabs.sendMessage(sender.tab.id, { action: "updateStreamingResponse", error: error.message });
+    console.error('[Mochi-Background] Error in generateChatGPTResponse:', error);
+    chrome.tabs.sendMessage(sender.tab.id, { 
+      action: "updateStreamingResponse", 
+      error: error.message 
+    });
     throw error;
   }
 }
