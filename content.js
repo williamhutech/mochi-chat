@@ -890,10 +890,44 @@ function createPageLinks(text) {
   console.log('Creating page links for text:', text);
   const linkedText = text.replace(/Page\s+(\d+)/gi, (match, pageNum) => {
     console.log('Found page reference:', pageNum);
-    // Add data attributes for both page number and navigation
-    return `<a href="#page=${pageNum}" class="page-link" data-page="${pageNum}" data-nav="page" style="color: black; text-decoration: underline; cursor: pointer;">Page ${pageNum}</a>`;
+    return `<a href="#" class="page-link" data-page="${pageNum}" style="color: black; text-decoration: underline; cursor: pointer;">Page ${pageNum}</a>`;
   });
-  console.log('Text with links:', linkedText);
+  
+  // Add click event listener using event delegation
+  setTimeout(() => {
+    const outputField = document.getElementById('output-field');
+    if (outputField) {
+      outputField.addEventListener('click', (e) => {
+        if (e.target.classList.contains('page-link')) {
+          e.preventDefault();
+          const pageNum = parseInt(e.target.dataset.page, 10);
+          
+          // Check if we're in a PDF context
+          const isPDF = document.contentType === 'application/pdf' || 
+                       window.location.href.toLowerCase().endsWith('.pdf');
+          
+          if (isPDF) {
+            // Get the current URL and update it with the new page number
+            const currentUrl = window.location.href;
+            const baseUrl = currentUrl.split('#')[0]; // Remove any existing hash
+            const newUrl = `${baseUrl}#page=${pageNum}`;
+            
+            // First update the hash
+            window.location.hash = `page=${pageNum}`;
+            
+            // Then force a reload after a small delay
+            setTimeout(() => {
+              window.location.reload();
+            }, 100);
+          } else {
+            // Fallback to hash-based navigation for non-PDF pages
+            window.location.hash = `page=${pageNum}`;
+          }
+        }
+      });
+    }
+  }, 0);
+  
   return linkedText;
 }
 
