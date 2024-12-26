@@ -1,106 +1,258 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap');
+
+#chat-toggle-button {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  width: 44px;
+  height: 44px;
+  background: #ffffff;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  transition: all 0.2s;
+  z-index: 10000;
+  color: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+#chat-toggle-button svg {
+  width: 26px;
+  height: 26px;
+}
+
+#chat-toggle-button:hover {
+  background: #f9f9f9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+}
+
+.hidden {
+  display: none !important;
+}
 
 #pdf-extractor-ui {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
-  width: 100%;
-  max-width: 400px;
-  max-height: 80vh;
-  background: white;
-  border: 1px solid #ccc;
+  bottom: 80px;
+  left: 20px;
+  width: 320px;
+  height: 500px;
+  background: #ffffff;
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  z-index: 10000;
+  font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: all 0.2s ease;
+  display: none;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+#pdf-extractor-ui.visible {
+  opacity: 1;
+  transform: translateY(0);
+  display: block;
+}
+
+#pdf-extractor-ui.expanded {
+  width: 416px;  /* 320px + 30% */
+  height: 650px; /* 500px + 30% */
+}
+
+#chat-container {
   display: flex;
   flex-direction: column;
-  z-index: 1000;
-  font-family: 'Inter', sans-serif;
+  height: 100%;
+  background: #ffffff;
+}
+
+#chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+#chat-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #000000;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+#expand-button,
+#close-button {
+  background: none;
+  border: none;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  opacity: 0.8;
+  margin-left: 4px;
+  transition: all 0.2s ease;
+}
+
+#expand-button:hover,
+#close-button:hover {
+  background: #f5f5f5;
+  opacity: 1;
 }
 
 #output-field {
   flex: 1;
   overflow-y: auto;
-  padding: 15px;
-  min-height: 100px;
-  max-height: calc(80vh - 100px);
-  border: 1px solid #eee;
-  font-family: 'Inter', sans-serif;
-  line-height: 1.4;
-  font-size: 12px;
-  word-wrap: break-word;
-}
-
-#output-field p {
-  margin: 0 0 8px 0;
-}
-
-#output-field p:last-child {
-  margin-bottom: 0;
-}
-
-#output-field ul, #output-field ol {
-  margin: 0;
-  padding-left: 20px; /* Adjust as needed for indentation */
-}
-
-#output-field li {
-  margin-top: 1px;
-  margin-bottom: 1px; /* Reduce the space between list items */
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #000000;
+  font-family: 'Noto Sans', sans-serif;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.03);
 }
 
 #input-container {
-  border-top: 1px solid #eee;
-  padding: 10px;
-  background: #f8f8f8;
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 8px;
-  display: flex;
-  flex-direction: column;
+  padding: 14px;
 }
 
 #prompt-wrapper {
   display: flex;
-  gap: 10px;
-  width: 100%;
-  box-sizing: border-box;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  padding: 6px 8px;
+  align-items: center;
 }
 
 #prompt-input {
-  flex: 1; /* Allow the input to take up remaining space */
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 12px; /* Smaller font size for placeholder */
-  box-sizing: border-box;
+  flex: 1;
+  border: none;
+  background: #ffffff;
+  padding: 6px 0 6px 4px;
+  font-size: 13px;
+  color: #000000;
+  outline: none;
+  font-family: 'Noto Sans', sans-serif;
+}
+
+#prompt-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+#prompt-input::placeholder {
+  color: #999;
+  padding-left: 4px;
 }
 
 #send-button {
-  flex: 0 0 auto; /* Allow the button to size itself naturally */
-  padding: 10px 15px; /* Adjust padding to fit within the UI */
-  background: #4CAF50;
-  color: white;
+  background: none;
   border: none;
-  border-radius: 4px;
+  color: #000;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 6px;
   cursor: pointer;
-  font-size: 12px; /* Match font size with the prompt input */
-  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  opacity: 0.8;
 }
 
 #send-button:hover {
-  background-color: #45a049;
+  background: #f5f5f5;
+  opacity: 1;
 }
 
 #generating-button {
   width: 100%;
-  padding: 10px 20px;
-  background: #666;
-  color: white;
-  border: none;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  color: #666;
+  font-size: 13px;
+  margin-top: 8px;
+  cursor: wait;
+  font-family: 'Noto Sans', sans-serif;
+}
+
+/* Markdown content styling */
+#output-field p {
+  margin: 0 0 10px 0;
+  font-family: 'Noto Sans', sans-serif;
+}
+
+#output-field ul, #output-field ol {
+  margin: 0 0 10px 0;
+  padding-left: 20px;
+}
+
+#output-field ul li, #output-field ol li {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+#output-field ul {
+  list-style-type: disc;
+}
+
+#output-field ol {
+  list-style-type: decimal;
+}
+
+#output-field code {
+  background: rgba(0, 0, 0, 0.03);
+  padding: 2px 4px;
   border-radius: 4px;
-  cursor: not-allowed;
-  font-size: 14px;
-  box-sizing: border-box;
-  display: none;
+  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace;
+  font-size: 12px;
+}
+
+#output-field pre {
+  background: rgba(0, 0, 0, 0.03);
+  padding: 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin-bottom: 10px;
+}
+
+#output-field pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Loading dots animation */
+.loading-dots::after {
+  content: '';
+  animation: dots 1.5s steps(5, end) infinite;
+}
+
+@keyframes dots {
+  0%, 20% { content: ''; }
+  40% { content: '.'; }
+  60% { content: '..'; }
+  80%, 100% { content: '...'; }
 }
 
 .error {
@@ -108,11 +260,11 @@
 }
 
 .page-link {
-  color: black; /* Change hyperlink color to black */
+  color: black;
   text-decoration: underline;
   cursor: pointer;
 }
 
 .page-link:hover {
-  color: #0D47A1; /* Optional: keep hover effect if desired */
+  color: #0D47A1;
 }

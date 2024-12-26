@@ -42,13 +42,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (isUIVisible) {
       hideUIComponent();
     } else {
+      // Show UI immediately for better user experience
+      showUIComponent();
+      
       // Extract text if not already done
       if (!isTextExtracted) {
-        initializeExtraction().then(() => {
-          showUIComponent();
+        initializeExtraction().catch(error => {
+          console.error('Error during extraction:', error);
+          showError('Failed to extract text from the document');
         });
-      } else {
-        showUIComponent();
       }
     }
   }
@@ -65,9 +67,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.error) {
       console.error('Error:', request.error);
-      outputField.innerHTML += `<span style="color: red;">Error: ${request.error}</span>`;
-      promptWrapper.style.display = 'flex';
-      generatingButton.style.display = 'none';
+      outputField.innerHTML += `<span class="error">Error: ${request.error}</span>`;
+      promptWrapper.classList.remove('hidden');
+      generatingButton.classList.add('hidden');
     } else if (request.text) {
       const existingPrompt = outputField.querySelector('strong')?.outerHTML || '';
       const linkedText = createPageLinks(request.text);
@@ -75,11 +77,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       outputField.scrollTop = outputField.scrollHeight;
 
       if (request.isFinal) {
-        promptWrapper.style.display = 'flex';
-        generatingButton.style.display = 'none';
+        promptWrapper.classList.remove('hidden');
+        generatingButton.classList.add('hidden');
         conversationHistory.push({ role: 'system', content: request.text });
-        
-        // Focus on the input field
         promptInput.focus();
       }
     }
@@ -116,11 +116,16 @@ function createToggleButton() {
       if (isUIVisible) {
         hideUIComponent();
       } else {
+        // Show UI immediately for better user experience
+        showUIComponent();
+        
         // Extract text if not already done
         if (!isTextExtracted) {
-          await initializeExtraction();
+          initializeExtraction().catch(error => {
+            console.error('Error during extraction:', error);
+            showError('Failed to extract text from the document');
+          });
         }
-        showUIComponent();
       }
     });
 
@@ -140,13 +145,19 @@ function showUIComponent() {
     // Create the main chat UI container if it doesn't exist
     uiComponent = document.createElement('div');
     uiComponent.id = 'pdf-extractor-ui';
-    uiComponent.style.display = 'none';
+    uiComponent.classList.add('hidden');
     
     // Load Noto Sans font for consistent typography
     const fontLink = document.createElement('link');
     fontLink.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap';
     fontLink.rel = 'stylesheet';
     document.head.appendChild(fontLink);
+    
+    // Load our custom styles
+    const styleLink = document.createElement('link');
+    styleLink.href = chrome.runtime.getURL('styles.css');
+    styleLink.rel = 'stylesheet';
+    document.head.appendChild(styleLink);
     
     // Create chat interface HTML structure
     uiComponent.innerHTML = `
@@ -181,7 +192,7 @@ function showUIComponent() {
               </svg>
             </button>
           </div>
-          <button id="generating-button" style="display: none;">
+          <button id="generating-button" class="hidden">
             <span class="loading-dots">Thinking</span>
           </button>
         </div>
@@ -189,283 +200,7 @@ function showUIComponent() {
     `;
     document.body.appendChild(uiComponent);
 
-    // Add event listeners for buttons
-    document.getElementById('expand-button').addEventListener('click', () => {
-      const isExpanded = uiComponent.classList.contains('expanded');
-      
-      if (isExpanded) {
-        requestAnimationFrame(() => {
-          uiComponent.style.width = '320px';
-          uiComponent.style.height = '500px';
-          uiComponent.classList.remove('expanded');
-        });
-      } else {
-        requestAnimationFrame(() => {
-          uiComponent.style.width = '416px';  // 320px + 30%
-          uiComponent.style.height = '650px';  // 500px + 30%
-          uiComponent.classList.add('expanded');
-        });
-      }
-    });
-
-    document.getElementById('close-button').addEventListener('click', () => {
-      hideUIComponent();
-    });
-
-    // Add event listener for input
-    const promptInput = document.getElementById('prompt-input');
-    promptInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendPrompt();
-      }
-    });
-
-    document.getElementById('send-button').addEventListener('click', sendPrompt);
-    
-    // Add modern styles
-    const style = document.createElement('style');
-    style.textContent = `
-      #chat-toggle-button {
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        width: 44px;
-        height: 44px;
-        background: #ffffff;
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-        transition: all 0.2s;
-        z-index: 10000;
-        color: #000000;
-        border: 1px solid rgba(0, 0, 0, 0.08);
-      }
-
-      #chat-toggle-button svg {
-        width: 26px;
-        height: 26px;
-      }
-
-      #chat-toggle-button:hover {
-        background: #f9f9f9;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-      }
-
-      #expand-button,
-      #close-button {
-        background: none;
-        border: none;
-        width: 26px;
-        height: 26px;
-        min-width: 26px;
-        min-height: 26px;
-        padding: 6px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-        opacity: 0.8;
-        margin-left: 4px;
-        transition: all 0.2s ease;
-      }
-
-      #expand-button:hover,
-      #close-button:hover {
-        background: #f5f5f5;
-        opacity: 1;
-      }
-
-      .header-buttons {
-        display: flex;
-        gap: 4px;
-        align-items: center;
-      }
-
-      #pdf-extractor-ui {
-        position: fixed;
-        bottom: 80px;
-        left: 20px;
-        width: 320px;
-        height: 500px;
-        background: #ffffff;
-        border-radius: 8px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-        z-index: 10000;
-        font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-        opacity: 0;
-        transform: translateY(20px);
-        transition: all 0.2s ease;
-        display: none;
-        overflow: hidden;
-        border: 1px solid rgba(0, 0, 0, 0.08);
-      }
-
-      #pdf-extractor-ui.expanded {
-        width: 416px;  /* 320px + 30% */
-        height: 650px; /* 500px + 30% */
-      }
-
-      #pdf-extractor-ui.visible {
-        opacity: 1;
-        transform: translateY(0);
-        display: block;
-      }
-
-      #chat-container {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-        background: #ffffff;
-      }
-
-      #chat-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 14px;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-      }
-
-      #chat-title {
-        font-size: 14px;
-        font-weight: 500;
-        color: #000000;
-      }
-
-      #output-field {
-        flex: 1;
-        overflow-y: auto;
-        padding: 14px 16px;
-        font-size: 13px;
-        line-height: 1.5;
-        color: #000000;
-        font-family: 'Noto Sans', sans-serif;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.03);
-      }
-
-      #input-container {
-        padding: 14px;
-      }
-
-      #prompt-wrapper {
-        display: flex;
-        gap: 8px;
-        background: #ffffff;
-        border: 1px solid rgba(0, 0, 0, 0.08);
-        border-radius: 6px;
-        padding: 6px 8px;
-        align-items: center;
-      }
-
-      #prompt-input {
-        flex: 1;
-        border: none;
-        background: #ffffff;
-        padding: 6px 0 6px 4px;
-        font-size: 13px;
-        color: #000000;
-        outline: none;
-        font-family: 'Noto Sans', sans-serif;
-      }
-
-      #prompt-input:focus {
-        outline: none;
-        box-shadow: none;
-      }
-
-      #prompt-input::placeholder {
-        color: #999;
-        padding-left: 4px;
-      }
-
-      #send-button {
-        background: none;
-        border: none;
-        color: #000;
-        width: 26px;
-        height: 26px;
-        min-width: 26px;
-        min-height: 26px;
-        padding: 6px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 4px;
-        opacity: 0.8;
-      }
-
-      #send-button:hover {
-        background: #f5f5f5;
-        opacity: 1;
-      }
-
-      #generating-button {
-        width: 100%;
-        padding: 8px;
-        background: #ffffff;
-        border: 1px solid rgba(0, 0, 0, 0.08);
-        border-radius: 6px;
-        color: #666;
-        font-size: 13px;
-        margin-top: 8px;
-        cursor: wait;
-        font-family: 'Noto Sans', sans-serif;
-      }
-
-      /* Markdown content styling */
-      #output-field p {
-        margin: 0 0 10px 0;
-        font-family: 'Noto Sans', sans-serif;
-      }
-
-      #output-field ul, #output-field ol {
-        margin: 0 0 10px 0;
-        padding-left: 20px;
-      }
-
-      #output-field ul li, #output-field ol li {
-        margin-bottom: 4px;
-        line-height: 1.5;
-      }
-
-      #output-field ul {
-        list-style-type: disc;
-      }
-
-      #output-field ol {
-        list-style-type: decimal;
-      }
-
-      #output-field code {
-        background: rgba(0, 0, 0, 0.03);
-        padding: 2px 4px;
-        border-radius: 4px;
-        font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace;
-        font-size: 12px;
-      }
-
-      #output-field pre {
-        background: rgba(0, 0, 0, 0.03);
-        padding: 10px;
-        border-radius: 6px;
-        overflow-x: auto;
-        margin-bottom: 10px;
-      }
-
-      #output-field pre code {
-        background: none;
-        padding: 0;
-      }
-    `;
-    document.head.appendChild(style);
-    
+    // Add event listeners
     document.getElementById('send-button').addEventListener('click', sendPrompt);
     document.getElementById('prompt-input').addEventListener('keypress', function(event) {
       if (event.key === 'Enter') {
@@ -478,17 +213,25 @@ function showUIComponent() {
     // Update the title if UI already exists
     document.getElementById('chat-title').textContent = title;
   }
-  
-  // Show the last response if it exists, otherwise initialize empty
+
+  // Show UI and restore last response if any
   const outputField = document.getElementById('output-field');
   outputField.innerHTML = lastResponse || '';
   
-  if (!isUIVisible) {
-    uiComponent.style.display = 'block';
-    uiComponent.classList.add('visible');
+  // Show or hide UI component
+  if (isUIVisible) {
+    uiComponent.classList.remove('visible');
+    setTimeout(() => {
+      uiComponent.classList.add('hidden');
+    }, 200);
+  } else {
+    uiComponent.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      uiComponent.classList.add('visible');
+      // Focus on input field after UI is visible
+      document.getElementById('prompt-input').focus();
+    });
     isUIVisible = true;
-    // Focus on input field when UI is shown
-    document.getElementById('prompt-input').focus();
   }
 }
 
@@ -506,7 +249,7 @@ function hideUIComponent() {
     lastResponse = document.getElementById('output-field').innerHTML;
     uiComponent.classList.remove('visible');
     setTimeout(() => {
-      uiComponent.style.display = 'none';
+      uiComponent.classList.add('hidden');
       // Remove expanded class when hiding
       uiComponent.classList.remove('expanded');
     }, 200);
@@ -536,7 +279,7 @@ async function initializeExtraction() {
         const hasPermission = await checkFileAccessPermission();
         hasCheckedPermission = true;
         if (!hasPermission) {
-          await showFileAccessInstructions();
+          showFileAccessInstructions();
           return;
         }
       }
@@ -547,7 +290,7 @@ async function initializeExtraction() {
     isTextExtracted = true;
   } catch (error) {
     console.error('Error extracting text:', error);
-    showError('Failed to extract text from the document');
+    throw error; // Let the caller handle the error
   }
 }
 
@@ -713,7 +456,6 @@ async function extractTextFromPDF() {
         }
         
         extractedText = formattedText.trim();
-        showUIComponent('');
         return;
       } catch (error) {
         console.error('Local file error:', error);
@@ -738,7 +480,6 @@ async function extractTextFromPDF() {
     }
     extractedText = formattedText.trim();
     
-    showUIComponent('');
   } catch (error) {
     showError('Error extracting text: ' + error.message);
   }
@@ -807,8 +548,8 @@ Main instruction/ask: `;
 
   // Clear input and hide prompt wrapper immediately
   promptInput.value = '';
-  document.getElementById('prompt-wrapper').style.display = 'none';
-  document.getElementById('generating-button').style.display = 'block';
+  document.getElementById('prompt-wrapper').classList.add('hidden');
+  document.getElementById('generating-button').classList.remove('hidden');
   document.getElementById('generating-button').textContent = 'Munching...';
 
   // Add user message to conversation history
@@ -821,8 +562,8 @@ Main instruction/ask: `;
   }, response => {
     if (chrome.runtime.lastError) {
       console.error('Error:', chrome.runtime.lastError);
-      document.getElementById('prompt-wrapper').style.display = 'flex';
-      document.getElementById('generating-button').style.display = 'none';
+      document.getElementById('prompt-wrapper').classList.remove('hidden');
+      document.getElementById('generating-button').classList.add('hidden');
     }
   });
 }
