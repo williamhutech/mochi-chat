@@ -550,7 +550,7 @@ Main instruction/ask: `;
   promptInput.value = '';
   document.getElementById('prompt-wrapper').classList.add('hidden');
   document.getElementById('generating-button').classList.remove('hidden');
-  document.getElementById('generating-button').textContent = 'Munching...';
+  document.getElementById('generating-button').textContent = 'Thinking...';
 
   // Add user message to conversation history
   conversationHistory.push({ role: 'user', content: prompt });

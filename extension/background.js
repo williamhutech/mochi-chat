@@ -38,100 +38,56 @@ chrome.webNavigation.onCommitted.addListener((details) => {
 });
 
 // Listen for tab updates to ensure chat button is always visible
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   console.log('[Mochi] Tab updated:', { tabId, status: changeInfo.status, url: tab.url });
   
-  // Skip chrome:// URLs and other restricted URLs
-  if (tab.url?.startsWith('chrome://') || 
-      tab.url?.startsWith('chrome-extension://') || 
-      tab.url?.startsWith('devtools://')) {
+  // Skip if URL is undefined or empty
+  if (!tab.url) {
+    console.log('[Mochi] Skipping undefined URL');
+    return;
+  }
+
+  // Skip restricted URLs
+  if (tab.url.startsWith('chrome://') || 
+      tab.url.startsWith('chrome-extension://') || 
+      tab.url.startsWith('devtools://')) {
     console.log('[Mochi] Skipping restricted URL:', tab.url);
     return;
   }
 
   if (changeInfo.status === 'complete') {
-    console.log('[Mochi] Attempting to inject chat button for tab:', tabId);
+    console.log('[Mochi] Tab load complete, injecting chat button for tab:', tabId);
     
     try {
-      chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        function: () => {
-          console.log('[Mochi] Injection script running');
-          
-          let toggleButton = document.getElementById('chat-toggle-button');
-          
-          // Create button if it doesn't exist or is not properly initialized
-          if (!toggleButton) {
-            console.log('[Mochi] Creating chat button');
-            toggleButton = document.createElement('div');
-            toggleButton.id = 'chat-toggle-button';
-          }
-
-          // Ensure button is properly styled and visible
-          toggleButton.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            width: 44px;
-            height: 44px;
-            background: #ffffff;
-            border-radius: 6px;
-            display: flex !important;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-            transition: all 0.2s;
-            z-index: 10000;
-            color: #000000;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-          `;
-
-          toggleButton.innerHTML = `
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-            </svg>
-          `;
-
-          // Add hover effect directly to the button
-          toggleButton.addEventListener('mouseenter', () => {
-            toggleButton.style.background = '#f9f9f9';
-            toggleButton.style.transform = 'translateY(-1px)';
-            toggleButton.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.08)';
-          });
-
-          toggleButton.addEventListener('mouseleave', () => {
-            toggleButton.style.background = '#ffffff';
-            toggleButton.style.transform = 'none';
-            toggleButton.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.08)';
-          });
-
-          // Add click handler
-          toggleButton.addEventListener('click', () => {
-            console.log('[Mochi] Chat button clicked');
-            // Send message to content script
-            if (window.chrome && chrome.runtime) {
-              chrome.runtime.sendMessage({ action: "toggleExtraction" });
-            }
-          });
-
-          // Ensure button is in the document
-          if (!toggleButton.parentElement) {
-            document.body.appendChild(toggleButton);
-            console.log('[Mochi] Chat button added to page');
-          }
-
-          // Force button to be visible
-          setTimeout(() => {
-            toggleButton.style.display = 'flex';
-            console.log('[Mochi] Ensuring button visibility');
-          }, 100);
+      // First, check if we can access the tab
+      await chrome.tabs.get(tabId);
+      
+      // Create a separate function for injection
+      async function injectChatButton() {
+        console.log('[Mochi] Creating chat button');
+        let toggleButton = document.getElementById('chat-toggle-button');
+        
+        if (!toggleButton) {
+          toggleButton = document.createElement('div');
+          toggleButton.id = 'chat-toggle-button';
+          document.body.appendChild(toggleButton);
+          console.log('[Mochi] Chat button created');
         }
-      }).catch(err => {
-        console.error('[Mochi] Failed to inject chat button:', err);
+
+        // Ensure button is visible
+        toggleButton.style.display = 'flex';
+        console.log('[Mochi] Ensuring button visibility');
+      }
+
+      // Execute the injection
+      await chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: injectChatButton
       });
+      
+      console.log('[Mochi] Chat button injection successful for tab:', tabId);
     } catch (err) {
-      console.error('[Mochi] Error during injection setup:', err);
+      console.error('[Mochi] Error during chat button injection:', err);
     }
   }
 });
@@ -146,6 +102,7 @@ chrome.commands.onCommand.addListener((command) => {
   }
 });
 
+//OpenAI API Key
 const API_KEY = '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'; // Replace with your actual API key
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

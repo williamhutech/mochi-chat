@@ -18,7 +18,8 @@
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {},
   "commands": {
@@ -46,7 +47,8 @@
       "resources": [
         "pdf.mjs",
         "pdf.worker.mjs",
-        "instructions.html"
+        "instructions.html",
+        "styles.css"
       ],
       "matches": ["<all_urls>", "file:///*"]
     }
