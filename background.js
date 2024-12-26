@@ -136,6 +136,16 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
+// Listen for keyboard command
+chrome.commands.onCommand.addListener((command) => {
+  if (command === "toggle-chat") {
+    // Send message to content script to toggle chat
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+      chrome.tabs.sendMessage(tabs[0].id, {action: "toggleExtraction"});
+    });
+  }
+});
+
 const API_KEY = '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'; // Replace with your actual API key
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

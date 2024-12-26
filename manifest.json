@@ -21,6 +21,15 @@
     "service_worker": "background.js"
   },
   "action": {},
+  "commands": {
+    "toggle-chat": {
+      "suggested_key": {
+        "default": "Ctrl+K",
+        "mac": "Command+K"
+      },
+      "description": "Toggle Mochi Chat"
+    }
+  },
   "content_scripts": [
     {
       "matches": [

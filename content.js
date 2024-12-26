@@ -1,4 +1,4 @@
-// Initialize variables
+// Global state variables to track UI components and conversation state
 let uiComponent = null;
 let toggleButton = null;
 let isUIVisible = false;
@@ -8,46 +8,25 @@ let lastResponse = '';
 let hasCheckedPermission = false;
 let isTextExtracted = false;
 
-// Create and show chat button immediately
+// Initialize the chat button as soon as the script loads
 createAndShowChatButton();
 
-// Add keyboard shortcut for Command+K
-document.addEventListener('keydown', (e) => {
-  if (e.metaKey && e.key === 'k') {
-    e.preventDefault();
-    e.stopPropagation();  // Stop event from bubbling up
-    if (isUIVisible) {
-      hideUIComponent();
-    } else {
-      if (!isTextExtracted) {
-        initializeExtraction().then(() => {
-          showUIComponent();
-        });
-      } else {
-        showUIComponent();
-      }
-    }
-  }
-});
-
-// Add event listener for page unload to reinitialize
+// Ensure chat button persists across page reloads and dynamic content changes
 window.addEventListener('beforeunload', () => {
   setTimeout(() => {
-    // Recreate chat button if needed
     createAndShowChatButton();
   }, 0);
 });
 
-// Ensure chat button is created when extension is loaded
 document.addEventListener('DOMContentLoaded', () => {
   createAndShowChatButton();
 });
 
-// Additional listener for dynamic page loads
 window.addEventListener('load', () => {
   createAndShowChatButton();
 });
 
+// Handle messages from the extension's background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "toggleExtraction") {
     if (isUIVisible) {
@@ -104,6 +83,7 @@ function createToggleButton() {
   }
 }
 
+// Initialize text extraction for PDF or website
 async function initializeExtraction() {
   // Only extract text if not already done
   if (isTextExtracted) return;
@@ -121,7 +101,7 @@ async function initializeExtraction() {
         const hasPermission = await checkFileAccessPermission();
         hasCheckedPermission = true;
         if (!hasPermission) {
-          showFileAccessInstructions();
+          await showFileAccessInstructions();
           return;
         }
       }
@@ -136,22 +116,88 @@ async function initializeExtraction() {
   }
 }
 
+// Function to show file access permission instructions
+function showFileAccessInstructions() {
+  return new Promise((resolve) => {
+    const instructionsDiv = document.createElement('div');
+    instructionsDiv.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 25px;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      z-index: 10000;
+      max-width: 450px;
+      font-family: 'Noto Sans', sans-serif;
+    `;
+    
+    instructionsDiv.innerHTML = `
+      <h3 style="margin-top: 0; color: #2c3e50;">Permission Required</h3>
+      <p>Mochi Chat needs permission to access local PDF files.</p>
+      <ol style="margin-bottom: 20px;">
+        <li>Click the button below to open Extensions page</li>
+        <li>Find "Mochi Chat"</li>
+        <li>Click "Details"</li>
+        <li>Toggle on "Allow access to file URLs"</li>
+        <li>Refresh this page</li>
+      </ol>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <button id="open-extensions" style="
+          padding: 8px 16px;
+          background: #007bff;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        ">Open Extensions Page</button>
+        <button id="close-instructions" style="
+          padding: 8px 16px;
+          background: #f8f9fa;
+          border: 1px solid #dee2e6;
+          border-radius: 4px;
+          cursor: pointer;
+        ">Close</button>
+      </div>
+    `;
+    
+    document.body.appendChild(instructionsDiv);
+    
+    document.getElementById('open-extensions').addEventListener('click', () => {
+      chrome.runtime.sendMessage({ action: "openExtensionsPage" });
+      instructionsDiv.remove();
+      resolve();
+    });
+    
+    document.getElementById('close-instructions').addEventListener('click', () => {
+      instructionsDiv.remove();
+      resolve();
+    });
+  });
+}
+
+// Main function to create and display the chat interface
 function showUIComponent() {
+  // Determine if we're on a PDF file or regular website
   const isPDF = document.contentType === 'application/pdf' || 
                 window.location.href.toLowerCase().endsWith('.pdf');
   const title = isPDF ? 'Mochi Chat - PDF' : 'Mochi Chat - Website';
                 
   if (!uiComponent) {
+    // Create the main chat UI container if it doesn't exist
     uiComponent = document.createElement('div');
     uiComponent.id = 'pdf-extractor-ui';
-    uiComponent.style.display = 'none'; // Ensure it starts hidden
+    uiComponent.style.display = 'none';
     
-    // Add Noto Sans font
+    // Load Noto Sans font for consistent typography
     const fontLink = document.createElement('link');
     fontLink.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap';
     fontLink.rel = 'stylesheet';
     document.head.appendChild(fontLink);
     
+    // Create chat interface HTML structure
     uiComponent.innerHTML = `
       <div id="chat-container">
         <div id="chat-header">
@@ -515,6 +561,8 @@ function hideUIComponent() {
   }
 }
 
+// Function to check for PDF and extract text
+// Checks if the current page is a PDF file and extracts text if necessary
 function checkForPDFAndExtract() {
   const isPDF = document.contentType === 'application/pdf' || 
                 window.location.href.toLowerCase().endsWith('.pdf');
@@ -525,6 +573,8 @@ function checkForPDFAndExtract() {
   }
 }
 
+// Function to check file access permission
+// Checks if the extension has permission to access local files
 async function checkFileAccessPermission() {
   return new Promise((resolve) => {
     try {
@@ -554,62 +604,96 @@ async function checkFileAccessPermission() {
   });
 }
 
-async function showFileAccessInstructions() {
-  const instructionsDiv = document.createElement('div');
-  instructionsDiv.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 25px;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-    z-index: 10000;
-    max-width: 450px;
-    font-family: 'Noto Sans', sans-serif;
-  `;
+// Function to show file access permission instructions
+// Creates a modal dialog explaining how to enable file access permissions
+function showFileAccessInstructions() {
+  return new Promise((resolve) => {
+    // Create modal for permission instructions
+    const modal = document.createElement('div');
+    modal.style.position = 'fixed';
+    modal.style.top = '50%';
+    modal.style.left = '50%';
+    modal.style.transform = 'translate(-50%, -50%)';
+    modal.style.backgroundColor = 'white';
+    modal.style.padding = '20px';
+    modal.style.borderRadius = '8px';
+    modal.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+    modal.style.zIndex = '10000';
+    modal.style.maxWidth = '400px';
+    modal.style.width = '90%';
+    
+    // Create semi-transparent overlay
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.right = '0';
+    overlay.style.bottom = '0';
+    overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
+    overlay.style.zIndex = '9999';
+    
+    // Create container for instructions
+    const instructionsDiv = document.createElement('div');
+    instructionsDiv.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 25px;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      z-index: 10000;
+      max-width: 450px;
+      font-family: 'Noto Sans', sans-serif;
+    `;
+    
+    instructionsDiv.innerHTML = `
+      <h3 style="margin-top: 0; color: #2c3e50;">Permission Required</h3>
+      <p>Mochi Chat needs permission to access local PDF files.</p>
+      <ol style="margin-bottom: 20px;">
+        <li>Click the button below to open Extensions page</li>
+        <li>Find "Mochi Chat"</li>
+        <li>Click "Details"</li>
+        <li>Toggle on "Allow access to file URLs"</li>
+        <li>Refresh this page</li>
+      </ol>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <button id="open-extensions" style="
+          padding: 8px 16px;
+          background: #007bff;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        ">Open Extensions Page</button>
+        <button id="close-instructions" style="
+          padding: 8px 16px;
+          background: #f8f9fa;
+          border: 1px solid #dee2e6;
+          border-radius: 4px;
+          cursor: pointer;
+        ">Close</button>
+      </div>
+    `;
   
-  instructionsDiv.innerHTML = `
-    <h3 style="margin-top: 0; color: #2c3e50;">Permission Required</h3>
-    <p>Mochi Chat needs permission to access local PDF files.</p>
-    <ol style="margin-bottom: 20px;">
-      <li>Click the button below to open Extensions page</li>
-      <li>Find "Mochi Chat"</li>
-      <li>Click "Details"</li>
-      <li>Toggle on "Allow access to file URLs"</li>
-      <li>Refresh this page</li>
-    </ol>
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <button id="open-extensions" style="
-        padding: 8px 16px;
-        background: #007bff;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-      ">Open Extensions Page</button>
-      <button id="close-instructions" style="
-        padding: 8px 16px;
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 4px;
-        cursor: pointer;
-      ">Close</button>
-    </div>
-  `;
+    document.body.appendChild(instructionsDiv);
   
-  document.body.appendChild(instructionsDiv);
+    document.getElementById('open-extensions').addEventListener('click', () => {
+      chrome.runtime.sendMessage({ action: "openExtensionsPage" });
+      instructionsDiv.remove();
+      resolve();
+    });
   
-  document.getElementById('open-extensions').addEventListener('click', () => {
-    chrome.runtime.sendMessage({ action: "openExtensionsPage" });
-  });
-  
-  document.getElementById('close-instructions').addEventListener('click', () => {
-    instructionsDiv.remove();
+    document.getElementById('close-instructions').addEventListener('click', () => {
+      instructionsDiv.remove();
+      resolve();
+    });
   });
 }
 
+// Function to extract text from PDF
+// Extracts text from a PDF file using the PDF.js library
 async function extractTextFromPDF() {
   try {
     const pdfjsLib = await import(chrome.runtime.getURL('pdf.mjs'));
@@ -699,10 +783,13 @@ async function extractTextFromPDF() {
   }
 }
 
+// Function to show error message
+// Displays an error message in the chat interface
 function showError(message) {
   showUIComponent(`<p class="error">${message}</p>`);
 }
 
+// Function to handle sending prompts to the AI
 function sendPrompt() {
   const promptInput = document.getElementById('prompt-input');
   const prompt = promptInput.value.trim();  // Add trim() to remove whitespace
@@ -755,6 +842,7 @@ Main instruction/ask: `;
   });
 }
 
+// Handle streaming response updates from the background script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "updateStreamingResponse") {
     console.log('Received streaming update:', request);
@@ -786,6 +874,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+// Function to render markdown text with specific options
 function renderMarkdown(text) {
   marked.setOptions({
     gfm: true,
@@ -796,7 +885,7 @@ function renderMarkdown(text) {
   return marked.parse(text);
 }
 
-// Add this new function to handle page number links
+// Function to create clickable page number links in the text
 function createPageLinks(text) {
   console.log('Creating page links for text:', text);
   const linkedText = text.replace(/Page\s+(\d+)/gi, (match, pageNum) => {
@@ -809,50 +898,22 @@ function createPageLinks(text) {
 }
 
 // Function to extract text from website
-function extractTextFromWebsite() {
+async function extractTextFromWebsite() {
   try {
-    // Get all text content from the page, excluding scripts and styles
-    const walker = document.createTreeWalker(
-      document.body,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: function(node) {
-          // Skip if parent is script, style, or hidden
-          const parent = node.parentElement;
-          if (!parent) return NodeFilter.FILTER_REJECT;
-          
-          if (parent.tagName === 'SCRIPT' || 
-              parent.tagName === 'STYLE' || 
-              parent.tagName === 'NOSCRIPT' ||
-              getComputedStyle(parent).display === 'none' ||
-              getComputedStyle(parent).visibility === 'hidden') {
-            return NodeFilter.FILTER_REJECT;
-          }
-          
-          // Accept if node contains non-whitespace
-          return node.textContent.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-        }
-      }
-    );
-
-    let textContent = '';
-    let node;
-    while (node = walker.nextNode()) {
-      const text = node.textContent.trim();
-      if (text) {
-        textContent += text + '\n';
-      }
-    }
-
-    // Clean up the text
-    extractedText = textContent
-      .replace(/(\n\s*){3,}/g, '\n\n')  // Replace multiple newlines with double newline
-      .trim();
-
-    // Show the UI with extracted text
-    showUIComponent('');
+    // Get all visible text from the webpage
+    const bodyText = document.body.innerText;
+    
+    // Remove any script content
+    const cleanText = bodyText.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    
+    // Store the extracted text
+    extractedText = cleanText;
+    
+    // Set flag to indicate successful extraction
+    isTextExtracted = true;
+    
   } catch (error) {
-    console.error('Error extracting website text:', error);
+    console.error('Error extracting text from website:', error);
     showError('Failed to extract text from the website');
   }
 }
