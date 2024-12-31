@@ -50,11 +50,8 @@
     </div>
 
     <button class="button" id="openExtensions">Open Extensions Page</button>
-    <script>
-      document.getElementById('openExtensions').addEventListener('click', () => {
-        chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
-      });
-    </script>
   </div>
+  
+  <script src="instructions.js"></script>
 </body>
-</html> 
+</html>

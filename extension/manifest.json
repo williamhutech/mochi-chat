@@ -5,17 +5,18 @@
   "description": "Chat with your PDFs and websites using AI",
   "permissions": [
     "activeTab",
+    "tabs",
     "scripting",
     "declarativeNetRequest",
     "webNavigation",
     "storage",
-    "downloads",
-    "tabs"
+    "downloads"
   ],
   "host_permissions": [
     "https://api.openai.com/",
-    "file:///*",
-    "<all_urls>"
+    "http://*/*",
+    "https://*/*",
+    "file:///*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -33,11 +34,8 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "<all_urls>",
-        "file:///*"
-      ],
-      "js": ["marked.min.js", "purify.min.js", "content.js"],
+      "matches": ["http://*/*", "https://*/*", "file:///*"],
+      "js": ["content.js", "marked.min.js"],
       "css": ["styles.css"],
       "run_at": "document_idle"
     }
@@ -48,9 +46,13 @@
         "pdf.mjs",
         "pdf.worker.mjs",
         "instructions.html",
+        "instructions.js",
+        "extract-text.js",
+        "chat.js",
+        "conversation.js",
         "styles.css"
       ],
-      "matches": ["<all_urls>", "file:///*"]
+      "matches": ["<all_urls>"]
     }
   ]
 }

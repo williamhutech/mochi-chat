@@ -1,1 +1,4 @@
-1. If you intend to add debug logs for the extension, ensure it's within the background script console.
+1. If you intend to add debug logs for the extension, ensure it's within the background script console. For each debug, identify where it's from, i.e. [Mochi-Background] or [Mochi-Content] or other modules.
+2. Using dynamic imports with chrome.runtime.getURL instead of static imports. 
+3. For each section of the code, include a comment of what it does and why it's necessary. Include the parameters of key function as well (i.e.  * @param {object} sender - Sender information for message passing, * @returns {object} Updated accumulated response and any error)
+4. Please think twice for removing any codes, as it may be already in use, or will be used in future.
