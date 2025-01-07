@@ -1,12 +1,6 @@
 /**
- * Background script for Mochi Chat Extension
- * 
- * Responsibilities:
- * 1. Logging from all components
- * 2. File permission checks
- * 3. Tab lifecycle management
- * 4. Extension lifecycle events
- * 5. Keyboard command handling
+ * Background script for Mochi Chat
+ * Handles extension-wide functionality and messaging
  */
 
 //=============================================================================
@@ -33,11 +27,6 @@ logToConsole('Background script initialized');
 //=============================================================================
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  // Log all non-logging messages for debugging
-  if (request.action !== "logFromContent") {
-    logToConsole(`Received message: ${request.action}`);
-  }
-  
   switch (request.action) {
     case "checkFilePermission":
       // Check if extension has permission to access local files
@@ -49,9 +38,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       
     case "openExtensionsPage":
       // Open Chrome extensions page for this extension
-      chrome.tabs.create({ 
-        url: 'chrome://extensions/?id=' + chrome.runtime.id 
-      });
+      logToConsole(`[Mochi-Background] Opening extensions page. Source: ${request.source}`);
+      const url = `chrome://extensions/?id=${chrome.runtime.id}`;
+      logToConsole(`[Mochi-Background] URL: ${url}`);
+      chrome.tabs.create({ url });
+      sendResponse({ success: true, url });
       break;
       
     case "logFromContent":
@@ -63,62 +54,78 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case "conversationUpdated":
       logToConsole('Conversation history updated');
       break;
+      
+    case "fetchLocalPDF":
+      fetchLocalPDF(request.url)
+        .then(sendResponse)
+        .catch(error => sendResponse({ data: null, error: error.message }));
+      return true; // Will respond asynchronously
   }
   
   return true; // Will respond asynchronously
 });
 
-//=============================================================================
-// Tab Lifecycle Management
-//=============================================================================
-
-// Log conversation history when tab is closed
-chrome.tabs.onRemoved.addListener(async (tabId, removeInfo) => {
+/**
+ * Handle fetching local PDF files
+ * @param {string} url - Local file URL to fetch
+ * @returns {Promise<{data: string, error: string|null}>} Base64 encoded PDF data or error
+ */
+async function fetchLocalPDF(url) {
   try {
-    logToConsole(`Tab ${tabId} closed`);
+    logToConsole('[Mochi-Background] Fetching local PDF: ' + url);
     
-    const tabs = await chrome.tabs.query({});
-    const targetTab = tabs.find(tab => tab.id === tabId);
+    // Remove 'file://' prefix if present
+    const filePath = url.replace(/^file:\/\//, '');
     
-    if (targetTab) {
-      // Get final conversation history before tab closes
-      chrome.tabs.sendMessage(tabId, {
-        action: 'getFinalHistory'
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          logToConsole(`Error getting final history: ${chrome.runtime.lastError.message}`, 'Mochi-Background', true);
-          return;
-        }
-        
-        if (response?.history) {
-          logToConsole('Final conversation history:');
-          response.history.forEach((msg, index) => {
-            logToConsole(`[${index + 1}] ${msg.role}: ${msg.content}`);
-          });
-        }
-      });
-    }
+    // Use chrome.runtime.getPackageDirectoryEntry to read local file
+    const response = await fetch('file://' + filePath);
+    const arrayBuffer = await response.arrayBuffer();
+    
+    // Convert to base64
+    const base64 = btoa(
+      new Uint8Array(arrayBuffer)
+        .reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+    
+    logToConsole('[Mochi-Background] Successfully read local PDF');
+    return { data: base64, error: null };
   } catch (error) {
-    logToConsole(`Error handling tab removal: ${error}`, 'Mochi-Background', true);
+    logToConsole('[Mochi-Background] Error reading local PDF: ' + error.message, true);
+    return { data: null, error: error.message };
   }
-});
+}
 
 //=============================================================================
 // Extension Lifecycle Events
 //=============================================================================
 
-// Handle extension icon clicks
+// Handle extension icon click
 chrome.action.onClicked.addListener((tab) => {
-  logToConsole(`Extension icon clicked for tab: ${tab.id}`);
+  logToConsole(`[Mochi-Background] Extension icon clicked for tab: ${tab.id}`);
 });
 
-// Handle extension installation/update
+// Handle extension installation and updates
+/**
+ * Handle extension installation and updates
+ * @param {Object} details - Installation details
+ * @param {string} details.reason - Reason for the event: 'install', 'update', 'chrome_update', or 'shared_module_update'
+ * @param {string} details.previousVersion - Previous version of the extension (only for 'update')
+ */
 chrome.runtime.onInstalled.addListener((details) => {
-  logToConsole(`Extension installed/updated: ${details.reason}`);
-  if (details.reason === 'install') {
-    chrome.tabs.create({
-      url: chrome.runtime.getURL('instructions.html')
-    });
+  switch (details.reason) {
+    case 'install':
+      // First time installation
+      logToConsole('[Mochi-Background] Extension installed for the first time');
+      chrome.tabs.create({
+        url: chrome.runtime.getURL('instructions.html')
+      });
+      break;
+      
+    case 'update':
+      // Extension updated to a new version
+      logToConsole(`[Mochi-Background] Extension updated from version ${details.previousVersion}`);
+      // Could show update notes or migration instructions if needed
+      break;
   }
 });
 

@@ -4,7 +4,7 @@
  */
 
 // Instructions for the AI model
-const CHAT_INSTRUCTIONS = `Based on the extracted text above:
+const CHAT_INSTRUCTIONS = `Based on the text above:
 - **Provide a straightforward, concise response**
 - Use bullet points or numbering when appropriate
 - Only when asked about a specific page, provide a response based on the page text alone.

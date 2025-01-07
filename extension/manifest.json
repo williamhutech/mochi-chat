@@ -49,8 +49,10 @@
         "instructions.js",
         "extract-text.js",
         "chat.js",
+        "cmaps/*",
         "conversation.js",
-        "styles.css"
+        "styles.css",
+        "marked.min.js"
       ],
       "matches": ["<all_urls>"]
     }

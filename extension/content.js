@@ -27,7 +27,7 @@ async function initializeChatToggle() {
   try {
     if (!toggleButton) {
       const button = document.createElement('div');
-      button.id = 'chat-toggle-button';
+      button.id = 'mochi-chat-toggle-button';
       button.innerHTML = `
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -61,8 +61,8 @@ async function createChatInterface() {
 
   // Create the main chat UI container (hidden by default)
   chatInterface = document.createElement('div');
-  chatInterface.id = 'pdf-extractor-ui';
-  chatInterface.classList.add('hidden');
+  chatInterface.id = 'mochi-pdf-extractor-ui';
+  chatInterface.classList.add('mochi-hidden');
   
   // Load Noto Sans font for consistent typography
   const fontLink = document.createElement('link');
@@ -83,11 +83,11 @@ async function createChatInterface() {
   
   // Create chat interface HTML structure
   chatInterface.innerHTML = `
-    <div id="chat-container">
-      <div id="chat-header">
-        <div id="chat-title">${title}</div>
-        <div class="header-buttons">
-          <button id="expand-button">
+    <div id="mochi-chat-container">
+      <div id="mochi-chat-header">
+        <div id="mochi-chat-title">${title}</div>
+        <div class="mochi-header-buttons">
+          <button id="mochi-expand-button">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M15 3h6v6"></path>
               <path d="M9 21H3v-6"></path>
@@ -95,7 +95,7 @@ async function createChatInterface() {
               <path d="M3 21l7-7"></path>
             </svg>
           </button>
-          <button id="close-button">
+          <button id="mochi-close-button">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -103,19 +103,19 @@ async function createChatInterface() {
           </button>
         </div>
       </div>
-      <div id="output-field"></div>
-      <div id="input-container">
-        <div id="prompt-wrapper">
-          <input type="text" id="prompt-input" placeholder="What would you like to ask?">
-          <button id="send-button">
+      <div id="mochi-output-field"></div>
+      <div id="mochi-input-container">
+        <div id="mochi-prompt-wrapper">
+          <input type="text" id="mochi-prompt-input" placeholder="What would you like to ask?">
+          <button id="mochi-send-button">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="22" y1="2" x2="11" y2="13"></line>
               <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
             </svg>
           </button>
         </div>
-        <button id="generating-button" class="hidden">
-          <span class="loading-dots">Thinking</span>
+        <button id="mochi-generating-button" class="mochi-hidden">
+          <span class="mochi-loading-dots">Thinking</span>
         </button>
       </div>
     </div>
@@ -123,14 +123,14 @@ async function createChatInterface() {
   document.body.appendChild(chatInterface);
 
   // Add event listeners
-  document.getElementById('send-button').addEventListener('click', sendPrompt);
-  document.getElementById('prompt-input').addEventListener('keypress', function(event) {
+  document.getElementById('mochi-send-button').addEventListener('click', sendPrompt);
+  document.getElementById('mochi-prompt-input').addEventListener('keypress', function(event) {
     if (event.key === 'Enter') {
       sendPrompt();
     }
   });
-  document.getElementById('close-button').addEventListener('click', hideChatInterface);
-  document.getElementById('expand-button').addEventListener('click', toggleExpand);
+  document.getElementById('mochi-close-button').addEventListener('click', hideChatInterface);
+  document.getElementById('mochi-expand-button').addEventListener('click', toggleExpand);
 }
 
 /**
@@ -153,14 +153,14 @@ function toggleChatInterface() {
 function showChatInterface() {
   if (!isInterfaceVisible) {
     // Restore last response if any
-    const outputField = document.getElementById('output-field');
+    const outputField = document.getElementById('mochi-output-field');
     outputField.innerHTML = lastResponse || '';
     
-    chatInterface.classList.remove('hidden');
+    chatInterface.classList.remove('mochi-hidden');
     requestAnimationFrame(() => {
-      chatInterface.classList.add('visible');
+      chatInterface.classList.add('mochi-visible');
       // Focus on input field after UI is visible
-      document.getElementById('prompt-input').focus();
+      document.getElementById('mochi-prompt-input').focus();
     });
     isInterfaceVisible = true;
   }
@@ -172,12 +172,12 @@ function showChatInterface() {
 function hideChatInterface() {
   if (chatInterface) {
     // Save the current response before hiding
-    lastResponse = document.getElementById('output-field').innerHTML;
-    chatInterface.classList.remove('visible');
+    lastResponse = document.getElementById('mochi-output-field').innerHTML;
+    chatInterface.classList.remove('mochi-visible');
     setTimeout(() => {
-      chatInterface.classList.add('hidden');
+      chatInterface.classList.add('mochi-hidden');
       // Remove expanded class when hiding
-      chatInterface.classList.remove('expanded');
+      chatInterface.classList.remove('mochi-expanded');
     }, 200);
     isInterfaceVisible = false;
   }
@@ -188,7 +188,7 @@ function hideChatInterface() {
  */
 function toggleExpand() {
   if (chatInterface) {
-    chatInterface.classList.toggle('expanded');
+    chatInterface.classList.toggle('mochi-expanded');
   }
 }
 
@@ -199,6 +199,7 @@ function toggleExpand() {
 /**
  * Extract text from the current page
  * Loads extract-text.js module if needed
+ * @returns {Promise<void>}
  */
 async function extractPageText() {
   try {
@@ -209,14 +210,70 @@ async function extractPageText() {
         import(extractModuleUrl)
       ]);
       extractModule = { extractText, CONTENT_TYPES };
-      logToBackground('Text extraction module loaded');
+      logToBackground('[Mochi-Content] Text extraction module loaded');
     }
 
-    // Extract text using loaded module
-    await extractModule.extractText({ type: extractModule.CONTENT_TYPES.WEBSITE });
-    logToBackground('Text extraction completed');
+    // Detect content type and prepare extraction options
+    const isPDF = document.contentType === 'application/pdf' || 
+                  window.location.href.toLowerCase().endsWith('.pdf');
+    
+    let extractionOptions;
+    if (isPDF) {
+      logToBackground('[Mochi-Content] Detected PDF document');
+      
+      // Check if it's a local PDF
+      const isLocalFile = window.location.protocol === 'file:';
+      let pdfData;
+      
+      if (isLocalFile) {
+        // For local files, get the PDF data through chrome.runtime message
+        logToBackground('[Mochi-Content] Local PDF detected, requesting data from background');
+        
+        const response = await chrome.runtime.sendMessage({
+          action: 'fetchLocalPDF',
+          url: window.location.href
+        });
+        
+        if (response.error) {
+          throw new Error(`Failed to get local PDF: ${response.error}`);
+        }
+        
+        // Convert base64 to ArrayBuffer so the LocalFileReader can read it
+        const binaryString = atob(response.data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        pdfData = bytes.buffer;
+      } else {
+
+        // For remote files, fetch the PDF
+        logToBackground('[Mochi-Content] Remote PDF detected, fetching file');
+        const response = await fetch(window.location.href);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch PDF: ${response.statusText}`);
+        }
+        pdfData = await response.arrayBuffer();
+      }
+        // PDF content    
+      extractionOptions = {
+        type: extractModule.CONTENT_TYPES.PDF,
+        file: pdfData
+      };
+    } else {
+      // Website content
+      extractionOptions = {
+        type: extractModule.CONTENT_TYPES.WEBSITE
+      };
+    }
+
+    // Extract text using the appropriate method
+    logToBackground(`[Mochi-Content] Starting extraction`);
+    await extractModule.extractText(extractionOptions);
+    logToBackground('[Mochi-Content] Text extraction completed');
+    
   } catch (error) {
-    logToBackground(`Error extracting text: ${error}`, true);
+    logToBackground(`[Mochi-Content] Error extracting text: ${error}`, true);
     showError('Failed to extract text from the document');
   }
 }
@@ -247,19 +304,19 @@ async function loadChatModule() {
  * Communicates directly with chat.js for response generation
  */
 async function sendPrompt() {
-  const promptInput = document.getElementById('prompt-input');
+  const promptInput = document.getElementById('mochi-prompt-input');
   const promptText = promptInput.value.trim();
   
   if (!promptText) return;
   
   try {
     // Update UI to show generating state
-    const promptWrapper = document.getElementById('prompt-wrapper');
-    const generatingButton = document.getElementById('generating-button');
-    const outputField = document.getElementById('output-field');
+    const promptWrapper = document.getElementById('mochi-prompt-wrapper');
+    const generatingButton = document.getElementById('mochi-generating-button');
+    const outputField = document.getElementById('mochi-output-field');
     
-    promptWrapper.classList.add('hidden');
-    generatingButton.classList.remove('hidden');
+    promptWrapper.classList.add('mochi-hidden');
+    generatingButton.classList.remove('mochi-hidden');
     
     outputField.scrollTop = outputField.scrollHeight;
     
@@ -281,9 +338,9 @@ async function sendPrompt() {
  * Reset UI state after error
  */
 function resetUIState() {
-  document.getElementById('prompt-wrapper').classList.remove('hidden');
-  document.getElementById('generating-button').classList.add('hidden');
-  document.getElementById('prompt-input').focus();
+  document.getElementById('mochi-prompt-wrapper').classList.remove('mochi-hidden');
+  document.getElementById('mochi-generating-button').classList.add('mochi-hidden');
+  document.getElementById('mochi-prompt-input').focus();
 }
 
 //=============================================================================
@@ -305,15 +362,15 @@ function renderMarkdown(text) {
 function createPageLinks(text) {
   const linkedText = text.replace(/Page\s+(\d+)/gi, (match, pageNum) => {
     logToBackground(`Found page reference: ${pageNum}`);
-    return `<a href="#" class="page-link" data-page="${pageNum}" style="color: black; text-decoration: underline; cursor: pointer;">Page ${pageNum}</a>`;
+    return `<a href="#" class="mochi-page-link" data-page="${pageNum}" style="color: black; text-decoration: underline; cursor: pointer;">Page ${pageNum}</a>`;
   });
   
   // Add click event listener using event delegation
   setTimeout(() => {
-    const outputField = document.getElementById('output-field');
+    const outputField = document.getElementById('mochi-output-field');
     if (outputField) {
       outputField.addEventListener('click', (e) => {
-        if (e.target.classList.contains('page-link')) {
+        if (e.target.classList.contains('mochi-page-link')) {
           e.preventDefault();
           const pageNum = parseInt(e.target.dataset.page, 10);
           
@@ -362,7 +419,7 @@ function logToBackground(message, isError = false) {
  * Function to show error message
  */
 function showError(message) {
-  showChatInterface(`<p class="error">${message}</p>`);
+  showChatInterface(`<p class="mochi-error">${message}</p>`);
 }
 
 //=============================================================================
@@ -412,9 +469,9 @@ function handleStreamingUpdate(update) {
     logToBackground(`Processing update: ${JSON.stringify(update)}`);
     
     // Get UI elements
-    const outputField = document.getElementById('output-field');
-    const promptWrapper = document.getElementById('prompt-wrapper');
-    const generatingButton = document.getElementById('generating-button');
+    const outputField = document.getElementById('mochi-output-field');
+    const promptWrapper = document.getElementById('mochi-prompt-wrapper');
+    const generatingButton = document.getElementById('mochi-generating-button');
     
     if (!outputField || !promptWrapper || !generatingButton) {
       throw new Error('Required UI elements not found');
@@ -445,8 +502,8 @@ function handleStreamingUpdate(update) {
       outputField.innerHTML = finalText;
       
       // Reset UI state
-      promptWrapper.classList.remove('hidden');
-      generatingButton.classList.add('hidden');
+      promptWrapper.classList.remove('mochi-hidden');
+      generatingButton.classList.add('mochi-hidden');
       
       // Reset accumulated response
       accumulatedResponse = '';
@@ -457,8 +514,8 @@ function handleStreamingUpdate(update) {
       logToBackground('Processed final update');
     } else if (update.isFinal && !update.text) {
       // Handle final update without text
-      promptWrapper.classList.remove('hidden');
-      generatingButton.classList.add('hidden');
+      promptWrapper.classList.remove('mochi-hidden');
+      generatingButton.classList.add('mochi-hidden');
       
       // Reset accumulated response
       accumulatedResponse = '';

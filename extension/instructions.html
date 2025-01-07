@@ -1,57 +1,164 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>PDF Text Extractor - Setup Required</title>
-  <style>
-    body {
-      font-family: 'Inter', system-ui, sans-serif;
-      max-width: 600px;
-      margin: 40px auto;
-      padding: 20px;
-      line-height: 1.6;
-    }
-    .container {
-      background: white;
-      padding: 30px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    .steps {
-      background: #f8f9fa;
-      padding: 20px;
-      border-radius: 6px;
-      margin: 20px 0;
-    }
-    .button {
-      background: #007bff;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 4px;
-      cursor: pointer;
-      display: inline-block;
-      text-decoration: none;
-      margin-top: 20px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Mochi Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #10A37F;
+            --text-color: #353740;
+            --secondary-text: #6E6E80;
+            --bg-color: #FFFFFF;
+            --border-color: #E5E5E5;
+            --hover-color: #0E906F;
+            --border-radius: 6px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans', sans-serif;
+            line-height: 1.5;
+            color: var(--text-color);
+            background: var(--bg-color);
+            display: flex;
+            min-height: 100vh;
+            justify-content: center;
+            align-items: center;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 540px;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .welcome-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+            opacity: 0.9;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-color);
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: var(--secondary-text);
+            margin-bottom: 2.5rem;
+            line-height: 1.6;
+            padding: 0 1rem;
+        }
+
+        .steps {
+            list-style: none;
+            text-align: left;
+            margin: 2.5rem 0;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 0.5rem 0;
+        }
+
+        .steps li {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            font-size: 1rem;
+            color: var(--text-color);
+        }
+
+        .steps li:not(:last-child) {
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .step-number {
+            color: var(--primary-color);
+            font-weight: 500;
+            margin-right: 1rem;
+            opacity: 0.9;
+        }
+
+        .btn {
+            display: inline-block;
+            background: var(--primary-color);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--border-radius);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 1rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.15s ease;
+        }
+
+        .btn:hover {
+            background: var(--hover-color);
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 1.5rem;
+            }
+
+            h1 {
+                font-size: 1.75rem;
+            }
+
+            .subtitle {
+                font-size: 1rem;
+                padding: 0;
+            }
+
+            .steps {
+                margin: 2rem 0;
+            }
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h1>One-time Setup Required</h1>
-    <p>To enable PDF Text Extractor to read local PDF files, please follow these steps:</p>
-    
-    <div class="steps">
-      <ol>
-        <li>Click the button below to open Chrome Extensions page</li>
-        <li>Find "PDF Text Extractor" in the list</li>
-        <li>Click "Details"</li>
-        <li>Toggle on "Allow access to file URLs"</li>
-      </ol>
+    <div class="container">
+        <div class="welcome-icon">🍡</div>
+        <h1>Welcome to Mochi Chat</h1>
+        <p class="subtitle">
+            Your AI-powered chat companion for PDFs and websites. Let's set up file access to unlock all features.
+        </p>
+        
+        <ul class="steps">
+            <li>
+                <span class="step-number">1.</span>
+                <span>Click the button below to open extension settings</span>
+            </li>
+            <li>
+                <span class="step-number">2.</span>
+                <span>Enable "Allow access to file URLs" under Site access</span>
+            </li>
+            <li>
+                <span class="step-number">3.</span>
+                <span>Return to your PDF or webpage</span>
+            </li>
+            <li>
+                <span class="step-number">4.</span>
+                <span>Click the Mochi Chat icon to start chatting</span>
+            </li>
+        </ul>
+
+        <button class="btn" id="openExtensions">Enable File Access</button>
     </div>
 
-    <button class="button" id="openExtensions">Open Extensions Page</button>
-  </div>
-  
-  <script src="instructions.js"></script>
+    <script src="instructions.js"></script>
 </body>
 </html>

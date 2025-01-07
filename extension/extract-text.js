@@ -8,7 +8,7 @@
 import { addExtractedText } from './conversation.js';
 
 // Content types enum for specifying extraction method
-export const CONTENT_TYPES = {
+const CONTENT_TYPES = {
   PDF: 'pdf',
   WEBSITE: 'website'
 };
@@ -28,11 +28,396 @@ function logToBackground(message, isError = false) {
 }
 
 /**
+ * Extract text from a website by capturing all visible text content
+ * 1. Content Selection: Select meaningful content using semantic selectors
+ * 2. Visibility & Duplicate Prevention: Filter based on visibility,
+ *    track processed nodes, skip exact duplicates or code-like content
+ * 3. (Optional) Sentence-Level Deduplication
+ * @returns {Promise<string>} A single formatted passage of extracted text
+ */
+async function extractFromWebsite() {
+  try {
+    logToBackground('[Mochi-Extract] Starting website text extraction');
+    
+    // Track processed nodes and text segments to prevent duplicates
+    const processedNodes = new Set();
+    const processedTexts = new Set();  
+    const duplicateStats = {
+      nodeSkipped: 0,
+      textDuplicates: 0,
+      totalProcessed: 0
+    };
+    let extractedText = '';
+
+    // Elements that typically contain meaningful text content
+    const CONTENT_SELECTORS = [
+      // HTML5 semantic elements
+      'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'article', 'section', 'main',
+      'li', 'td', 'th', 'dt', 'dd',
+      'time', 'q', 'cite',
+      'figcaption', 'blockquote',
+      'details', 'summary', 'caption',
+      
+      // Rich semantic roles
+      'header[role="heading"]',
+      '[role="article"]',
+      '[role="main"]',
+      '[role="contentinfo"]',
+      '[role="complementary"]',
+      
+      // Lists and Definition Content
+      'dl', 'ol', 'ul',
+      'table',
+      'caption', 'thead', 'tbody', 'tfoot',
+      
+      // Web App Specific - Email
+      '[role="gridcell"]',
+      '[role="row"]',
+      '[role="list"]',
+      '[role="listitem"]',
+      '.message',
+      '.conversation',
+      '.thread',
+      '.email-body',
+      '.mail-content',
+      '.preview-text',
+      '.subject-line',
+      '.chat-message',
+      '.feed-item',
+      '.card-content',
+      '.panel-content',
+      '.tab-content',
+      
+      // Web App - Specific Content
+      '[role="textbox"]',
+      '[contenteditable="true"]',
+      '[data-content-editable]',
+      '.monaco-editor .view-line',
+      '[role="document"]',
+      '.dashboard-content',
+      '.main-content',
+      '.content-area',
+      '.text-content',
+      '[data-testid*="content"]',
+      '[data-testid*="text"]',
+      '[aria-label*="content"]',
+      '[aria-label*="text"]'
+    ];
+
+    // Elements to exclude from text extraction
+    const EXCLUDE_SELECTOR = [
+      // Technical elements
+      'script', 'style', 'noscript', 'iframe',
+      'svg', 'code', 'pre', '.highlight',
+      'meta', 'link', 'head', '.code',
+      'canvas',
+      
+      // Common code block class names
+      '.hljs', '.prism', '.syntax-highlight',
+      '.CodeMirror', '.ace_editor',
+      
+      // Interactive Components
+      'button', '[role="button"]',
+      '[type="button"]', '[type="submit"]',
+      '.btn', '.button',
+      '[role="tablist"]', '[role="tab"]',
+      '[role="menu"]', '[role="menuitem"]',
+      '.dropdown', '.select',
+      
+      // Navigation and Menu
+      'nav', '[role="navigation"]',
+      '.menu-item', '.nav-item',
+      '.navigation', '.navbar',
+      '.breadcrumb', '.pagination',
+      
+      // Metadata and Info
+      '.meta', '.metadata',
+      '.article-meta', '.post-meta',
+      '.author-info', '.publish-date',
+      '.info-box', '.info-panel',
+      '.byline', '.dateline',
+      '.timestamp', '.time-info',
+      
+      // Social Media
+      '.share-buttons', '.social-links',
+      '.follow-us', '.social-media',
+      '.twitter-embed', '.facebook-embed',
+      
+      // Layout elements
+      'footer', 'aside',
+      '#footer', '#sidebar', '#menu',
+      '#ad-banner', '#banner',
+      
+      // Advertisement and promotional
+      '.ad', '.advertisement', '.promotion',
+      '.sponsor', '.social-share',
+      '.newsletter-signup', '.subscribe',
+      '.cta', '.call-to-action',
+      '.promo', '.offer',
+      
+      // UI elements
+      '.popup', '.modal', '.overlay',
+      '.tooltip', '.popover',
+      '[role="alert"]', '[role="dialog"]',
+      '.notification', '.toast',
+      '.badge', '.label',
+      
+      // Sidebars and widgets
+      '.sidebar', '.widget',
+      
+      // Loading and Dynamic
+      '.loading', '.spinner',
+      '.placeholder', '.skeleton',
+      '[aria-busy="true"]',
+      
+      // Tracking and analytics
+      '.tracking', '.analytics', '.third-party',
+      
+      // Utility and Hidden
+      '.hidden', '.invisible',
+      '.collapsed', '.expanded',
+      '.sr-only', '[aria-hidden="true"]',
+      '[hidden]',
+      
+      // Web App Specific Exclusions
+      '.toolbar', '.status-bar',
+      '.action-bar', '.command-bar',
+      '.navigation-bar', '.tab-bar',
+      '.toolbar-item', '.menu-bar',
+      '.context-menu', '.quick-input',
+      '.suggestions', '.hint',
+      '.welcome-page', '.getting-started',
+      '.activity-bar', '.auxiliary-bar',
+      '.panel-header', '.tree-view',
+      '.list-view-header', '.status-indicator',
+      '.progress-bar', '.search-box',
+      '.filter-box', '.drag-handle',
+      '.resize-handle', '.scrollbar',
+      '.gutter', '.split-view-container',
+      '.monaco-editor .cursor',
+      '.monaco-editor .line-numbers',
+      '.monaco-editor .decorations-overlay',
+      '.monaco-editor .overlays',
+      '.monaco-editor .margin'
+    ].join(',');
+
+    /**
+     * Get a human-readable node path for debugging
+     */
+    function getNodePath(node) {
+      const path = [];
+      let current = node;
+      while (current && current.tagName) {
+        path.unshift(
+          current.tagName.toLowerCase() +
+          (current.id ? `#${current.id}` : '') +
+          (current.className ? `.${current.className.replace(/\s+/g, '.')}` : '')
+        );
+        current = current.parentElement;
+      }
+      return path.join(' > ');
+    }
+
+    /**
+     * Check if node or its ancestors have been processed
+     */
+    function isNodeProcessed(node) {
+      let current = node;
+      while (current) {
+        if (processedNodes.has(current)) {
+          duplicateStats.nodeSkipped++;
+          logToBackground(
+            `[Mochi-Extract] Skipping duplicate node: ${
+              current.tagName || 'TEXT_NODE'
+            } (Parent chain: ${getNodePath(current)})`
+          );
+          return true;
+        }
+        current = current.parentElement;
+      }
+      return false;
+    }
+
+    /**
+     * Check if element should be excluded
+     */
+    function shouldExclude(element) {
+      let current = element;
+      while (current) {
+        if (current.matches && current.matches(EXCLUDE_SELECTOR)) {
+          logToBackground(
+            `[Mochi-Extract] Excluding element: ${getNodePath(current)}`
+          );
+          return true;
+        }
+        current = current.parentElement;
+      }
+      return false;
+    }
+
+    /**
+     * Clean and normalize a text segment
+     */
+    function cleanTextSegment(text) {
+      return text
+        .trim()
+        .replace(/\s+/g, ' ')
+        .replace(/([.!?])\s*(?:\1\s*)+/g, '$1 ')
+        .replace(/([.!?])\s*([A-Za-z])/g, '$1 $2');
+    }
+
+    /**
+     * Check if an element is visible
+     */
+    function isVisible(element) {
+      const style = window.getComputedStyle(element);
+      return (
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        style.opacity !== '0' &&
+        element.offsetWidth > 0 &&
+        element.offsetHeight > 0
+      );
+    }
+
+    /**
+     * Simple check: if the text contains certain JSON-like markers,
+     * we skip the entire text node.
+     */
+    function containsJsonMarkers(text) {
+      // For the snippet you provided, "contentId" or "annotations" are key markers.
+      // Add more if needed.
+      const lower = text.toLowerCase();
+      return lower.includes('"contentid":') || lower.includes('"annotations":');
+    }
+
+    /**
+     * Check if text segment is unique (exact match) among processed texts
+     */
+    function isUniqueText(text, element) {
+      duplicateStats.totalProcessed++;
+
+      const cleaned = cleanTextSegment(text);
+      if (!cleaned) return false;
+      
+      if (processedTexts.has(cleaned)) {
+        duplicateStats.textDuplicates++;
+        logToBackground(
+          `[Mochi-Extract] Skipping duplicate text from ${getNodePath(element)}`
+        );
+        return false;
+      }
+
+      processedTexts.add(cleaned);
+      return true;
+    }
+
+    // Collect text from each selector
+    for (const selector of CONTENT_SELECTORS) {
+      try {
+        const elements = document.querySelectorAll(selector);
+        logToBackground(
+          `[Mochi-Extract] Processing selector: ${selector} (Found ${elements.length} elements)`
+        );
+        
+        for (const element of elements) {
+          if (!isNodeProcessed(element) && isVisible(element) && !shouldExclude(element)) {
+            const text = element.textContent;
+            // 1) Skip if text is too short
+            // 2) Skip if it contains JSON markers
+            if (
+              text && 
+              text.trim().length > 20 &&
+              !containsJsonMarkers(text) &&
+              isUniqueText(text, element)
+            ) {
+              extractedText += cleanTextSegment(text) + ' ';
+              processedNodes.add(element);
+            }
+          }
+        }
+      } catch (selectorError) {
+        logToBackground(
+          `[Mochi-Extract] Error processing selector ${selector}: ${selectorError.message}`,
+          true
+        );
+      }
+    }
+
+    // Final trim
+    let finalText = extractedText.trim();
+
+    /**
+     * Optional: Sentence-level dedup
+     */
+    function deduplicateSentences(text) {
+      // Naive sentence split
+      const rawSentences = text.split(/([.?!])\s*/);
+      const sentences = [];
+      for (let i = 0; i < rawSentences.length; i += 2) {
+        const sentence = (rawSentences[i] || '').trim();
+        const punctuation = (rawSentences[i + 1] || '').trim();
+        if (sentence) {
+          sentences.push((sentence + (punctuation || '')).trim());
+        }
+      }
+
+      const seen = new Set();
+      const results = [];
+      const MIN_SENT_LEN = 30; // skip dedup if short
+
+      for (const s of sentences) {
+        const norm = s.toLowerCase().replace(/\s+/g, ' ').trim();
+        if (norm.length < MIN_SENT_LEN) {
+          results.push(s);
+          continue;
+        }
+        if (!seen.has(norm)) {
+          seen.add(norm);
+          results.push(s);
+        }
+      }
+
+      return results.join(' ');
+    }
+
+    // Perform optional sentence-level dedup
+    const deduplicatedText = deduplicateSentences(finalText);
+
+    // Log stats
+    logToBackground(
+      `[Mochi-Extract] Extraction Statistics:
+      Total Elements Processed: ${duplicateStats.totalProcessed}
+      Duplicate Nodes Skipped: ${duplicateStats.nodeSkipped}
+      Exact Text Segments Duplicates: ${duplicateStats.textDuplicates}
+      Original Text Length: ${finalText.length} characters
+      Final Text Length: ${deduplicatedText.length} characters
+      Reduction: ${(
+        ((finalText.length - deduplicatedText.length) / finalText.length) * 100
+      ).toFixed(2)}%
+    `
+    );
+
+    // Return final text
+    return deduplicatedText;
+
+  } catch (error) {
+    logToBackground(`[Mochi-Extract] Error extracting text: ${error}`, true);
+    throw error;
+  }
+}
+
+/**
  * Extract text from a PDF file using PDF.js
  * Handles PDF parsing, text extraction, and error cases like password protection
+ * @param {ArrayBuffer} file - The PDF file data
+ * @returns {Promise<string>} The extracted text
  */
 async function extractFromPDF(file) {
   try {
+    logToBackground('Starting PDF text extraction');
+    
     const pdfjsLib = await import(chrome.runtime.getURL('pdf.mjs'));
     
     if (!pdfjsLib || !pdfjsLib.getDocument) {
@@ -40,7 +425,7 @@ async function extractFromPDF(file) {
     }
 
     pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('pdf.worker.mjs');
-    
+
     const loadingTask = pdfjsLib.getDocument({
       data: file,
       cMapUrl: chrome.runtime.getURL('cmaps/'),
@@ -49,200 +434,94 @@ async function extractFromPDF(file) {
 
     loadingTask.onPassword = function(updatePassword, reason) {
       logToBackground('PDF is password-protected', true);
-      throw new Error('This PDF is password-protected and cannot be processed');
+      throw new Error('PDF is password protected');
     };
 
     const pdf = await loadingTask.promise;
-    let formattedText = '';
+    logToBackground(`PDF loaded successfully. Pages: ${pdf.numPages}`);
     
+    let extractedText = '';
+
     for (let i = 1; i <= pdf.numPages; i++) {
+      logToBackground(`Extracting text from page ${i}/${pdf.numPages}`);
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
-      const pageText = textContent.items.map(item => item.str).join(' ');
-      formattedText += `Page ${i}: "${pageText}"\n\n`;
-    }
-    
-    logToBackground(`Successfully extracted ${formattedText.length} characters from PDF`);
-    logToBackground(`Extracted text as follows:\n${formattedText}`);
-    
-    return formattedText.trim();
-  } catch (error) {
-    logToBackground(`PDF extraction error: ${error}`, true);
-    throw new Error('Failed to extract text from PDF');
-  }
-}
-
-/**
- * Extract text from a website by focusing on main content
- * Filters out boilerplate, scripts, and non-content elements
- */
-async function extractFromWebsite() {
-  try {
-    // Important content selectors
-    const contentSelectors = [
-      'article',
-      'main',
-      '.content',
-      '.main-content',
-      '#content',
-      '#main-content',
-      '.post-content',
-      '.article-content'
-    ];
-
-    // Elements to exclude
-    const excludeSelectors = [
-      'script',
-      'style',
-      'noscript',
-      'header',
-      'footer',
-      'nav',
-      '#header',
-      '#footer',
-      '#nav',
-      '.header',
-      '.footer',
-      '.nav',
-      '.advertisement',
-      '.ads',
-      '.cookie-notice',
-      '.popup',
-      'iframe',
-      'button',
-      '[role="button"]',
-      '.btn',
-      '.button',
-      'input[type="button"]',
-      'input[type="submit"]',
-      '[class*="button"]',
-      '[class*="btn-"]'
-    ].join(',');
-
-    // Try to find main content first
-    let mainContent = '';
-    for (const selector of contentSelectors) {
-      const elements = document.querySelectorAll(selector);
-      if (elements.length > 0) {
-        elements.forEach(element => {
-          // Clone the element to avoid modifying the original
-          const clone = element.cloneNode(true);
-          
-          // Remove excluded elements from clone
-          const excludedElements = clone.querySelectorAll(excludeSelectors);
-          excludedElements.forEach(el => el.remove());
-          
-          mainContent += clone.textContent + '\n\n';
-        });
-        break; // Use first matching content container
-      }
-    }
-
-    // If no main content found, fall back to body but with careful filtering
-    if (!mainContent.trim()) {
-      logToBackground('No main content container found, using filtered body content');
       
-      // Remove all excluded elements first
-      const tempBody = document.body.cloneNode(true);
-      const excludedElements = tempBody.querySelectorAll(excludeSelectors);
-      excludedElements.forEach(el => el.remove());
-
-      // Get remaining text nodes with meaningful content
-      const walker = document.createTreeWalker(
-        tempBody,
-        NodeFilter.SHOW_TEXT,
-        {
-          acceptNode: function(node) {
-            // Skip if parent is hidden
-            if (node.parentElement && 
-                (window.getComputedStyle(node.parentElement).display === 'none' ||
-                 window.getComputedStyle(node.parentElement).visibility === 'hidden')) {
-              return NodeFilter.FILTER_REJECT;
-            }
-            
-            const text = node.textContent.trim();
-            // Accept if text has reasonable length and contains actual sentences
-            if (text.length > 20 && /[.!?]/.test(text)) {
-              return NodeFilter.FILTER_ACCEPT;
-            }
-            return NodeFilter.FILTER_REJECT;
-          }
-        },
-        false
-      );
-
-      let node;
-      let paragraphs = [];
-      while (node = walker.nextNode()) {
-        const text = node.textContent.trim();
-        if (text) {
-          paragraphs.push(text);
+      // Process text content with proper positioning
+      let lastY, text = [];
+      for (const item of textContent.items) {
+        if (lastY != item.transform[5] && text.length) {
+          // New line detected
+          extractedText += text.join('') + '\n';
+          text = [];
         }
+        text.push(item.str);
+        lastY = item.transform[5];
       }
-
-      mainContent = paragraphs.join('\n\n');
-    }
-
-    // Clean up the extracted text
-    const cleanText = mainContent
-      .replace(/[\s\n]+/g, ' ')           // Normalize whitespace
-      .replace(/\s+([.,!?])/g, '$1')      // Fix punctuation spacing
-      .replace(/\s+/g, ' ')               // Remove extra spaces
-      .split(/[.!?]+/)                    // Split into sentences
-      .filter(sentence => {
-        const trimmed = sentence.trim();
-        // Keep sentences that are reasonable length and don't look like code/scripts
-        return trimmed.length > 20 && 
-               trimmed.length < 500 &&
-               !trimmed.includes('{') &&
-               !trimmed.includes('function') &&
-               !trimmed.includes('var ') &&
-               !trimmed.includes('console.') &&
-               !/^[0-9a-f]{8,}$/i.test(trimmed);
-      })
-      .join('. ')
-      .trim();
-
-    if (cleanText) {
-      logToBackground(`Successfully extracted ${cleanText.length} characters of meaningful content`);
-      logToBackground(`Extracted text as follows:\n${cleanText}`);
-      return cleanText;
-    } else {
-      throw new Error('No meaningful content found on page');
-    }
-  } catch (error) {
-    logToBackground(`Website extraction error: ${error}`, true);
-    throw new Error('Failed to extract text from website');
-  }
-}
-
-/**
- * Main extraction function that handles both PDF and website text extraction
- * Provides a unified interface for the rest of the extension
- */
-export async function extractText(options) {
-  try {
-    let extractedText = '';
-    
-    if (options.type === CONTENT_TYPES.PDF) {
-      if (!options.file) {
-        throw new Error('PDF file is required for PDF extraction');
+      if (text.length) {
+        extractedText += text.join('') + '\n';
       }
-      extractedText = await extractFromPDF(options.file);
-    } else if (options.type === CONTENT_TYPES.WEBSITE) {
-      extractedText = await extractFromWebsite();
-    } else {
-      throw new Error('Invalid content type specified');
+      
+      // Add page separator
+      extractedText += '\n';
     }
-    
-    // Add to conversation history
-    addExtractedText(extractedText);
-    
-    logToBackground(`Extracted ${extractedText.length} characters`);
-    return extractedText;
-    
+
+    const finalText = extractedText.trim();    
+    return finalText;
   } catch (error) {
-    logToBackground(`Error extracting text: ${error}`, true);
+    logToBackground(`Error extracting PDF text: ${error}`, true);
     throw error;
   }
 }
+
+/**
+ * Main extraction function that handles both websites and PDFs
+ * @param {object} options - Extraction options
+ * @param {string} options.type - Type of content to extract (CONTENT_TYPES.WEBSITE or CONTENT_TYPES.PDF)
+ * @param {ArrayBuffer} [options.file] - PDF file data (required for PDF extraction)
+ * @returns {Promise<string>} The extracted text
+ */
+async function extractText(options) {
+  try {
+    logToBackground(`Starting text extraction for type: ${options.type}`);
+    let extractedText = '';
+    
+    switch (options.type) {
+      case CONTENT_TYPES.WEBSITE:
+        extractedText = await extractFromWebsite();
+        break;
+      case CONTENT_TYPES.PDF:
+        if (!options.file) {
+          throw new Error('PDF file data is required');
+        }
+        extractedText = await extractFromPDF(options.file);
+        break;
+      default:
+        throw new Error(`Unsupported content type: ${options.type}`);
+    }
+    
+    // Don't throw if no text is found, just log a warning
+    if (!extractedText) {
+      logToBackground('Warning: No text could be extracted');
+      extractedText = '';
+    }
+
+    // Log the full extracted text to background console
+    logToBackground(`Extracted ${options.type} Text`);
+    logToBackground(extractedText);
+    logToBackground(`End of {options.type} Text`);
+    logToBackground(`Total characters extracted: ${extractedText.length}`);
+
+    // Add extracted text to conversation history in one go
+    if (extractedText) {
+      addExtractedText(extractedText);
+    }
+    
+    return extractedText;
+  } catch (error) {
+    logToBackground(`Error in text extraction: ${error}`, true);
+    throw error;
+  }
+}
+
+export { extractText, CONTENT_TYPES };
