@@ -1,0 +1,20 @@
+# Mochi Chat Extension Requirements
+
+## General Guidelines
+1. Debug logs should be in background script console with module identifiers [Mochi-Background], [Mochi-Content], etc.
+2. Use dynamic imports with chrome.runtime.getURL instead of static imports
+3. Include detailed comments for code sections and function parameters
+4. Be cautious about removing code - it may be in use or needed for future
+5. Keep this memory file updated with new requirements
+6. Review memory file before making changes to check for conflicts
+7. Document resolved issues in Tips section
+
+## Current Features
+- Text extraction from PDFs and websites
+- Chat interface with toggle functionality
+- Message history management
+- Background script for extension-wide functionality
+- Error handling and logging
+
+## Tips for Myself
+1. Be careful when removing exports from modules - check for dependencies first. Example: getHistory() in conversation.js is used by chat.js for conversation state management.

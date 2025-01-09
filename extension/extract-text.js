@@ -1,22 +1,44 @@
 /**
- * Text extraction module for Mochi Chat
+ * Text extraction module for Mochi Chat Extension
+ * 
  * This module handles text extraction from both PDFs and websites.
  * It provides a unified interface for extraction while handling the specifics
  * of each content type internally.
+ * 
+ * Key Features:
+ * - Website text extraction with semantic content selection
+ * - PDF text extraction using PDF.js
+ * - Duplicate detection and removal
+ * - Error handling and logging
+ * - Content type-specific optimizations
  */
 
 import { addExtractedText } from './conversation.js';
 
-// Content types enum for specifying extraction method
+//=============================================================================
+// Constants and Types
+//=============================================================================
+
+/**
+ * Content types enum for specifying extraction method
+ * @enum {string}
+ */
 const CONTENT_TYPES = {
-  PDF: 'pdf',
-  WEBSITE: 'website'
+  /** PDF document type */
+  PDF: 'PDF',
+  /** Website/HTML document type */
+  WEBSITE: 'Website'
 };
+
+//=============================================================================
+// Logging
+//=============================================================================
 
 /**
  * Log to background console with module identifier
  * @param {string} message - Message to log
  * @param {boolean} isError - Whether this is an error message
+ * @returns {void}
  */
 function logToBackground(message, isError = false) {
   chrome.runtime.sendMessage({
@@ -27,13 +49,21 @@ function logToBackground(message, isError = false) {
   });
 }
 
+//=============================================================================
+// Website Text Extraction
+//=============================================================================
+
 /**
  * Extract text from a website by capturing all visible text content
+ * 
+ * Process:
  * 1. Content Selection: Select meaningful content using semantic selectors
  * 2. Visibility & Duplicate Prevention: Filter based on visibility,
  *    track processed nodes, skip exact duplicates or code-like content
  * 3. (Optional) Sentence-Level Deduplication
+ * 
  * @returns {Promise<string>} A single formatted passage of extracted text
+ * @throws {Error} If extraction fails
  */
 async function extractFromWebsite() {
   try {
@@ -408,82 +438,95 @@ async function extractFromWebsite() {
   }
 }
 
+//=============================================================================
+// PDF Text Extraction
+//=============================================================================
+
 /**
  * Extract text from a PDF file using PDF.js
- * Handles PDF parsing, text extraction, and error cases like password protection
+ * Handles PDF parsing, text extraction, and error cases
+ * 
+ * Features:
+ * - Automatic password detection
+ * - Page-by-page extraction
+ * - Error handling for corrupted files
+ * - Progress tracking
+ * 
  * @param {ArrayBuffer} file - The PDF file data
  * @returns {Promise<string>} The extracted text
+ * @throws {Error} If PDF is password protected or corrupted
  */
 async function extractFromPDF(file) {
   try {
-    logToBackground('Starting PDF text extraction');
+    logToBackground('[Mochi-Extract] Starting PDF text extraction');
     
     const pdfjsLib = await import(chrome.runtime.getURL('pdf.mjs'));
+    logToBackground('[Mochi-Extract] PDF.js library loaded');
     
-    if (!pdfjsLib || !pdfjsLib.getDocument) {
-      throw new Error('PDF.js library not loaded correctly');
-    }
-
+    // Configure worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('pdf.worker.mjs');
 
-    const loadingTask = pdfjsLib.getDocument({
-      data: file,
-      cMapUrl: chrome.runtime.getURL('cmaps/'),
-      cMapPacked: true,
-    });
-
-    loadingTask.onPassword = function(updatePassword, reason) {
-      logToBackground('PDF is password-protected', true);
+    // Load PDF document
+    const loadingTask = pdfjsLib.getDocument({ data: file });
+    loadingTask.onPassword = (updatePassword, reason) => {
+      logToBackground('[Mochi-Extract] PDF requires password', true);
       throw new Error('PDF is password protected');
     };
 
-    const pdf = await loadingTask.promise;
-    logToBackground(`PDF loaded successfully. Pages: ${pdf.numPages}`);
+    const pdfDoc = await loadingTask.promise;
+    logToBackground(`[Mochi-Extract] PDF loaded successfully. Total pages: ${pdfDoc.numPages}`);
     
     let extractedText = '';
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      logToBackground(`Extracting text from page ${i}/${pdf.numPages}`);
-      const page = await pdf.getPage(i);
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      logToBackground(`[Mochi-Extract] Processing page ${i}/${pdfDoc.numPages}`);
+      const page = await pdfDoc.getPage(i);
       const textContent = await page.getTextContent();
+      const pageText = textContent.items
+        .map(item => item.str)
+        .join(' ')
+        .trim();
       
-      // Process text content with proper positioning
-      let lastY, text = [];
-      for (const item of textContent.items) {
-        if (lastY != item.transform[5] && text.length) {
-          // New line detected
-          extractedText += text.join('') + '\n';
-          text = [];
-        }
-        text.push(item.str);
-        lastY = item.transform[5];
-      }
-      if (text.length) {
-        extractedText += text.join('') + '\n';
-      }
-      
-      // Add page separator
-      extractedText += '\n';
+      // Format as specified: Page X: 'content'
+      extractedText += `Page ${i}: '${pageText}'${i < pdfDoc.numPages ? '\n' : ''}`;
     }
 
     const finalText = extractedText.trim();    
     return finalText;
   } catch (error) {
-    logToBackground(`Error extracting PDF text: ${error}`, true);
+    logToBackground(`[Mochi-Extract] Error extracting PDF text: ${error}`, true);
     throw error;
   }
 }
 
+//=============================================================================
+// Main Interface
+//=============================================================================
+
 /**
  * Main extraction function that handles both websites and PDFs
+ * Provides a unified interface while handling type-specific logic internally
+ * 
+ * Usage:
+ * ```javascript
+ * const text = await extractText({
+ *   type: CONTENT_TYPES.WEBSITE
+ * });
+ * // or
+ * const text = await extractText({
+ *   type: CONTENT_TYPES.PDF,
+ *   file: pdfArrayBuffer
+ * });
+ * ```
+ * 
  * @param {object} options - Extraction options
- * @param {string} options.type - Type of content to extract (CONTENT_TYPES.WEBSITE or CONTENT_TYPES.PDF)
+ * @param {CONTENT_TYPES} options.type - Type of content to extract
  * @param {ArrayBuffer} [options.file] - PDF file data (required for PDF extraction)
  * @returns {Promise<string>} The extracted text
+ * @throws {Error} If extraction fails or invalid options provided
  */
 async function extractText(options) {
   try {
-    logToBackground(`Starting text extraction for type: ${options.type}`);
+    logToBackground(`[Mochi-Extract] Starting text extraction for type: ${options.type}`);
     let extractedText = '';
     
     switch (options.type) {
@@ -509,7 +552,7 @@ async function extractText(options) {
     // Log the full extracted text to background console
     logToBackground(`Extracted ${options.type} Text`);
     logToBackground(extractedText);
-    logToBackground(`End of {options.type} Text`);
+    logToBackground(`End of ${options.type} Text`);
     logToBackground(`Total characters extracted: ${extractedText.length}`);
 
     // Add extracted text to conversation history in one go
@@ -519,7 +562,7 @@ async function extractText(options) {
     
     return extractedText;
   } catch (error) {
-    logToBackground(`Error in text extraction: ${error}`, true);
+    logToBackground(`[Mochi-Extract] Error in text extraction: ${error}`, true);
     throw error;
   }
 }

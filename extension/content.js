@@ -1,19 +1,38 @@
 /**
- * Content script for Mochi Chat
+ * Content script for Mochi Chat Extension
  * Handles UI injection, text extraction, and communication with background script
+ * 
+ * Key Features:
+ * - Chat interface creation and management
+ * - Text extraction from PDFs and websites
+ * - Real-time streaming response handling
+ * - Page navigation and link creation
+ * - Error handling and logging
  */
 
 //=============================================================================
 // Global State
 //=============================================================================
-let chatInterface = null;        // Main chat interface reference
-let toggleButton = null;         // Toggle button reference
-let isInterfaceVisible = false;  // Chat interface visibility state
-let extractModule = null;        // Text extraction module reference
-let lastResponse = '';          // Last AI response
-let initialized = false;         // Initialization state flag
-let chatModule;                  // Chat module reference
-let accumulatedResponse = '';    // Accumulated response from chat.js
+
+/**
+ * Global state variables for managing chat interface and functionality
+ * @type {Object} chatInterface - Main chat interface DOM element
+ * @type {Object} toggleButton - Toggle button DOM element
+ * @type {boolean} isInterfaceVisible - Chat interface visibility state
+ * @type {Object} extractModule - Text extraction module reference
+ * @type {string} lastResponse - Last AI response
+ * @type {boolean} initialized - Initialization state flag
+ * @type {Object} chatModule - Chat module reference
+ * @type {string} accumulatedResponse - Accumulated response from chat.js
+ */
+let chatInterface = null;        
+let toggleButton = null;         
+let isInterfaceVisible = false;  
+let extractModule = null;        
+let lastResponse = '';          
+let initialized = false;         
+let chatModule;                  
+let accumulatedResponse = '';    
 
 //=============================================================================
 // Chat Toggle Button
@@ -22,6 +41,8 @@ let accumulatedResponse = '';    // Accumulated response from chat.js
 /**
  * Initialize chat toggle button
  * Creates and injects the toggle button for the chat interface
+ * @throws {Error} If button creation or injection fails
+ * @returns {Promise<void>}
  */
 async function initializeChatToggle() {
   try {
@@ -54,7 +75,8 @@ async function initializeChatToggle() {
 
 /**
  * Create the chat interface in hidden state
- * Called during initialization alongside toggle button creation
+ * Sets up UI elements, styles, and event listeners
+ * @returns {Promise<void>}
  */
 async function createChatInterface() {
   if (chatInterface) return;
@@ -136,6 +158,7 @@ async function createChatInterface() {
 /**
  * Toggle chat interface visibility
  * Used by both click and keyboard shortcuts
+ * @returns {Promise<void>}
  */
 function toggleChatInterface() {
   logToBackground('Toggling chat interface');
@@ -148,7 +171,8 @@ function toggleChatInterface() {
 
 /**
  * Show the chat interface
- * Only handles visibility toggling
+ * Only handles visibility toggling and state management
+ * @returns {Promise<void>}
  */
 function showChatInterface() {
   if (!isInterfaceVisible) {
@@ -168,6 +192,8 @@ function showChatInterface() {
 
 /**
  * Hide the chat interface
+ * Handles visibility toggling and state cleanup
+ * @returns {Promise<void>}
  */
 function hideChatInterface() {
   if (chatInterface) {
@@ -185,6 +211,8 @@ function hideChatInterface() {
 
 /**
  * Toggle expand/collapse of chat interface
+ * Manages UI state for expanded/collapsed view
+ * @returns {void}
  */
 function toggleExpand() {
   if (chatInterface) {
@@ -198,7 +226,7 @@ function toggleExpand() {
 
 /**
  * Extract text from the current page
- * Loads extract-text.js module if needed
+ * Loads extract-text.js module if needed and processes page content
  * @returns {Promise<void>}
  */
 async function extractPageText() {
@@ -283,15 +311,13 @@ async function extractPageText() {
 //=============================================================================
 
 /**
- * Import chat module
- */
-const chatModuleUrl = chrome.runtime.getURL('chat.js');
-
-/**
- * Load chat module
+ * Load chat module dynamically
+ * Imports chat.js using chrome.runtime.getURL
+ * @returns {Promise<void>}
  */
 async function loadChatModule() {
   if (!chatModule) {
+    const chatModuleUrl = chrome.runtime.getURL('chat.js');
     const { generateChatGPTResponse } = await import(chatModuleUrl);
     chatModule = { generateChatGPTResponse };
     logToBackground('Chat module loaded');
@@ -302,6 +328,8 @@ async function loadChatModule() {
 /**
  * Handle sending prompts to the AI
  * Communicates directly with chat.js for response generation
+ * @param {string} prompt - User input prompt
+ * @returns {Promise<void>}
  */
 async function sendPrompt() {
   const promptInput = document.getElementById('mochi-prompt-input');
@@ -336,6 +364,8 @@ async function sendPrompt() {
 
 /**
  * Reset UI state after error
+ * Cleans up UI elements and resets flags
+ * @returns {void}
  */
 function resetUIState() {
   document.getElementById('mochi-prompt-wrapper').classList.remove('mochi-hidden');
@@ -347,7 +377,11 @@ function resetUIState() {
 // Utility Functions
 //=============================================================================
 
-// Function to render markdown text with specific options
+/**
+ * Function to render markdown text with specific options
+ * @param {string} text - Text to render as markdown
+ * @returns {string} HTML string of rendered markdown
+ */
 function renderMarkdown(text) {
   marked.setOptions({
     gfm: true,
@@ -358,10 +392,13 @@ function renderMarkdown(text) {
   return marked.parse(text);
 }
 
-// Function to create clickable page number links in the text
+/**
+ * Function to create clickable page number links in the text
+ * @param {string} text - Text to process for page numbers
+ * @returns {string} Text with clickable page number links
+ */
 function createPageLinks(text) {
   const linkedText = text.replace(/Page\s+(\d+)/gi, (match, pageNum) => {
-    logToBackground(`Found page reference: ${pageNum}`);
     return `<a href="#" class="mochi-page-link" data-page="${pageNum}" style="color: black; text-decoration: underline; cursor: pointer;">Page ${pageNum}</a>`;
   });
   
@@ -405,6 +442,9 @@ function createPageLinks(text) {
 
 /**
  * Utility function to send logs to background script
+ * @param {string} message - Message to log
+ * @param {boolean} isError - Whether this is an error message
+ * @returns {void}
  */
 function logToBackground(message, isError = false) {
   chrome.runtime.sendMessage({
@@ -416,7 +456,9 @@ function logToBackground(message, isError = false) {
 }
 
 /**
- * Function to show error message
+ * Function to show error message in UI
+ * @param {string} message - Error message to display
+ * @returns {void}
  */
 function showError(message) {
   showChatInterface(`<p class="mochi-error">${message}</p>`);
@@ -463,6 +505,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  * @param {string} update.text - Processed text content to append
  * @param {boolean} update.isFinal - Whether this is the final update
  * @param {string} update.error - Error message if any
+ * @returns {Promise<void>}
  */
 function handleStreamingUpdate(update) {
   try {
@@ -539,6 +582,7 @@ function handleStreamingUpdate(update) {
 /**
  * Main initialization function
  * Creates chat interface and toggle button, starts text extraction
+ * @returns {Promise<void>}
  */
 async function initializeContent() {
   if (initialized) return;
@@ -549,6 +593,7 @@ async function initializeContent() {
     await Promise.all([
       initializeChatToggle(),
       createChatInterface(),
+      hideChatInterface(),
       extractPageText()
     ]);
     

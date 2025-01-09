@@ -1,6 +1,11 @@
 /**
- * Background script for Mochi Chat
- * Handles extension-wide functionality and messaging
+ * Background script for Mochi Chat Extension
+ * Handles extension-wide functionality including:
+ * - Message passing between content scripts and extension
+ * - File access permissions
+ * - Extension lifecycle events
+ * - Keyboard shortcuts
+ * - Local file operations
  */
 
 //=============================================================================
@@ -10,8 +15,8 @@
 /**
  * Log message to background console with module identifier and timestamp
  * @param {string} message - Message to log
- * @param {string} source - Source module of the message (e.g., Mochi-Content, Mochi-Chat)
- * @param {boolean} isError - Whether this is an error message
+ * @param {string} source - Source module identifier (e.g., Mochi-Background, Mochi-Content)
+ * @param {boolean} isError - If true, logs as error; otherwise as info
  */
 function logToConsole(message, source = 'Mochi-Background', isError = false) {
   const timestamp = new Date().toISOString();
@@ -23,30 +28,65 @@ function logToConsole(message, source = 'Mochi-Background', isError = false) {
 logToConsole('Background script initialized');
 
 //=============================================================================
-// Message Handlers
+// Message Handling & Response Functions
 //=============================================================================
 
+/**
+ * Handle fetching local PDF files
+ * @param {string} url - Local file URL to fetch
+ * @returns {Promise<{data: string|null, error: string|null}>} Base64 encoded PDF data or error message
+ */
+async function fetchLocalPDF(url) {
+  try {
+    logToConsole('Fetching local PDF: ' + url);
+    
+    // Remove 'file://' prefix if present for consistency
+    const filePath = url.replace(/^file:\/\//, '');
+    
+    // Use fetch API to read local file
+    const response = await fetch('file://' + filePath);
+    const arrayBuffer = await response.arrayBuffer();
+    
+    // Convert ArrayBuffer to base64 string
+    const base64 = btoa(
+      new Uint8Array(arrayBuffer)
+        .reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+    
+    logToConsole('Successfully read local PDF');
+    return { data: base64, error: null };
+  } catch (error) {
+    logToConsole('Error reading local PDF: ' + error.message, true);
+    return { data: null, error: error.message };
+  }
+}
+
+/**
+ * Main message listener for handling all incoming messages
+ * @param {object} request - Message request object
+ * @param {string} request.action - Action to perform
+ * @param {object} sender - Sender information
+ * @param {function} sendResponse - Callback to send response
+ * @returns {boolean} True if response will be sent asynchronously
+ */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   switch (request.action) {
     case "checkFilePermission":
-      // Check if extension has permission to access local files
       chrome.extension.isAllowedFileSchemeAccess((isAllowed) => {
         logToConsole(`File access permission: ${isAllowed}`);
         sendResponse({ hasPermission: isAllowed });
       });
-      return true; // Will respond asynchronously
+      return true;
       
     case "openExtensionsPage":
-      // Open Chrome extensions page for this extension
-      logToConsole(`[Mochi-Background] Opening extensions page. Source: ${request.source}`);
+      logToConsole(`Opening extensions page. Source: ${request.source}`);
       const url = `chrome://extensions/?id=${chrome.runtime.id}`;
-      logToConsole(`[Mochi-Background] URL: ${url}`);
+      logToConsole(`URL: ${url}`);
       chrome.tabs.create({ url });
       sendResponse({ success: true, url });
       break;
       
     case "logFromContent":
-      // Handle logs from content scripts
       const { message, source, isError } = request;
       logToConsole(message, source || 'Mochi-Content', isError);
       break;
@@ -59,80 +99,53 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       fetchLocalPDF(request.url)
         .then(sendResponse)
         .catch(error => sendResponse({ data: null, error: error.message }));
-      return true; // Will respond asynchronously
+      return true;
   }
   
-  return true; // Will respond asynchronously
+  return true;
 });
-
-/**
- * Handle fetching local PDF files
- * @param {string} url - Local file URL to fetch
- * @returns {Promise<{data: string, error: string|null}>} Base64 encoded PDF data or error
- */
-async function fetchLocalPDF(url) {
-  try {
-    logToConsole('[Mochi-Background] Fetching local PDF: ' + url);
-    
-    // Remove 'file://' prefix if present
-    const filePath = url.replace(/^file:\/\//, '');
-    
-    // Use chrome.runtime.getPackageDirectoryEntry to read local file
-    const response = await fetch('file://' + filePath);
-    const arrayBuffer = await response.arrayBuffer();
-    
-    // Convert to base64
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer)
-        .reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
-    
-    logToConsole('[Mochi-Background] Successfully read local PDF');
-    return { data: base64, error: null };
-  } catch (error) {
-    logToConsole('[Mochi-Background] Error reading local PDF: ' + error.message, true);
-    return { data: null, error: error.message };
-  }
-}
 
 //=============================================================================
 // Extension Lifecycle Events
 //=============================================================================
 
-// Handle extension icon click
+/**
+ * Handle extension icon clicks
+ * @param {chrome.tabs.Tab} tab - Information about the active tab
+ */
 chrome.action.onClicked.addListener((tab) => {
-  logToConsole(`[Mochi-Background] Extension icon clicked for tab: ${tab.id}`);
+  logToConsole(`Extension icon clicked for tab: ${tab.id}`);
 });
 
-// Handle extension installation and updates
 /**
  * Handle extension installation and updates
  * @param {Object} details - Installation details
- * @param {string} details.reason - Reason for the event: 'install', 'update', 'chrome_update', or 'shared_module_update'
- * @param {string} details.previousVersion - Previous version of the extension (only for 'update')
+ * @param {string} details.reason - Event reason: 'install', 'update', 'chrome_update', 'shared_module_update'
+ * @param {string} details.previousVersion - Previous version (for updates only)
  */
 chrome.runtime.onInstalled.addListener((details) => {
   switch (details.reason) {
     case 'install':
-      // First time installation
-      logToConsole('[Mochi-Background] Extension installed for the first time');
+      logToConsole('Extension installed for the first time');
       chrome.tabs.create({
         url: chrome.runtime.getURL('instructions.html')
       });
       break;
       
     case 'update':
-      // Extension updated to a new version
-      logToConsole(`[Mochi-Background] Extension updated from version ${details.previousVersion}`);
-      // Could show update notes or migration instructions if needed
+      logToConsole(`Extension updated from version ${details.previousVersion}`);
       break;
   }
 });
 
 //=============================================================================
-// Keyboard Commands
+// Keyboard Command Handling
 //=============================================================================
 
+/**
+ * Handle keyboard shortcuts defined in manifest.json
+ * @param {string} command - The keyboard command that was triggered
+ */
 chrome.commands.onCommand.addListener((command) => {
   logToConsole(`Keyboard command received: ${command}`);
   
