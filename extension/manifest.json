@@ -4,13 +4,7 @@
   "version": "1.0",
   "description": "Chat with your PDFs and websites using AI",
   "permissions": [
-    "activeTab",
-    "tabs",
-    "scripting",
-    "declarativeNetRequest",
-    "webNavigation",
-    "storage",
-    "downloads"
+    "activeTab"
   ],
   "host_permissions": [
     "https://api.openai.com/",

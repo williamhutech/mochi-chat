@@ -132,7 +132,32 @@ async function extractFromWebsite() {
       '[data-testid*="content"]',
       '[data-testid*="text"]',
       '[aria-label*="content"]',
-      '[aria-label*="text"]'
+      '[aria-label*="text"]',
+
+      // Additional modern web app selectors
+      'div[role="main"]',
+      'div[role="article"]',
+      'div[role="contentinfo"]',
+      'div[role="complementary"]',
+      '.content',
+      '#content',
+      '#main',
+      '.main',
+      'div[class*="content"]',
+      'div[class*="main"]',
+      'div[class*="body"]',
+      'div[class*="text"]',
+      // Email client specific additions
+      'div[role="document"]',
+      'div[role="presentation"]',
+      'div[role="textbox"]',
+      '[aria-label*="message"]',
+      '[aria-label*="email"]',
+      // Common content containers
+      '.container',
+      '.wrapper',
+      '[class*="container"]',
+      '[class*="wrapper"]'
     ];
 
     // Elements to exclude from text extraction
@@ -257,11 +282,6 @@ async function extractFromWebsite() {
       while (current) {
         if (processedNodes.has(current)) {
           duplicateStats.nodeSkipped++;
-          logToBackground(
-            `[Mochi-Extract] Skipping duplicate node: ${
-              current.tagName || 'TEXT_NODE'
-            } (Parent chain: ${getNodePath(current)})`
-          );
           return true;
         }
         current = current.parentElement;
@@ -506,18 +526,6 @@ async function extractFromPDF(file) {
  * Main extraction function that handles both websites and PDFs
  * Provides a unified interface while handling type-specific logic internally
  * 
- * Usage:
- * ```javascript
- * const text = await extractText({
- *   type: CONTENT_TYPES.WEBSITE
- * });
- * // or
- * const text = await extractText({
- *   type: CONTENT_TYPES.PDF,
- *   file: pdfArrayBuffer
- * });
- * ```
- * 
  * @param {object} options - Extraction options
  * @param {CONTENT_TYPES} options.type - Type of content to extract
  * @param {ArrayBuffer} [options.file] - PDF file data (required for PDF extraction)
@@ -531,7 +539,63 @@ async function extractText(options) {
     
     switch (options.type) {
       case CONTENT_TYPES.WEBSITE:
-        extractedText = await extractFromWebsite();
+        logToBackground('[Mochi-Background] Waiting for content to stabilize');
+        
+        // Create a promise that resolves when content stabilizes
+        const stableText = await new Promise((resolve) => {
+          let lastContentLength = 0;
+          let stabilityCounter = 0;
+          
+          const observer = new MutationObserver(async () => {
+            const currentText = await extractFromWebsite();
+            const currentLength = currentText.trim().length;
+            
+            if (currentLength === lastContentLength) {
+              stabilityCounter++;
+              if (stabilityCounter >= 2) { // Content has stabilized for 2 consecutive checks
+                logToBackground('[Mochi-Background] Content has stabilized, proceeding with extraction');
+                observer.disconnect();
+                resolve(currentText);
+              }
+            } else {
+              stabilityCounter = 0;
+            }
+            lastContentLength = currentLength;
+          });
+          
+          // Observe document body for changes (childlist > subtree > characterdata)
+          observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true
+          });
+          
+          // Set a maximum wait time of 10 seconds
+          setTimeout(async () => {
+            observer.disconnect();
+            const finalText = await extractFromWebsite();
+            const textLength = finalText ? finalText.trim().length : 0;
+            logToBackground(`[Mochi-Background] Reached timeout, saving current content (${textLength} characters)`);
+            
+            // Add main logging section here
+            logToBackground(`Extracted ${options.type} Text`);
+            logToBackground(finalText);
+            logToBackground(`End of ${options.type} Text`);
+            logToBackground(`Total characters extracted: ${finalText.length}`);
+            
+            if (finalText && finalText.trim().length > 0) {
+              await addExtractedText(finalText);
+            }
+            resolve(finalText);
+          }, 6000);
+          
+          // Trigger initial check
+          extractFromWebsite().then(text => {
+            lastContentLength = text.trim().length;
+          });
+        });
+        
+        extractedText = stableText;
         break;
       case CONTENT_TYPES.PDF:
         if (!options.file) {
