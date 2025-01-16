@@ -34,6 +34,10 @@ const AI_PROVIDERS = {
   OPENAI: 'openai'
 };
 
+/**
+ * Current selected AI provider
+ * @type {string}
+ */
 const CURRENT_PROVIDER = AI_PROVIDERS.GEMINI;
 
 /**
@@ -379,13 +383,8 @@ async function streamGeminiResponse(messages) {
               const parsed = JSON.parse(buffer);
               if (parsed.candidates?.[0]?.content?.parts?.[0]?.text) {
                 const text = parsed.candidates[0].content.parts[0].text;
-                accumulatedResponse += text;
-                logToBackground(`Processed Gemini text: ${text}`);
-                sendToContent({
-                  action: 'updateStreamingResponse',
-                  text: text,
-                  isFinal: false
-                });
+                // Process text with optimized chunk handling
+                await streamTextInChunks(text);
               }
             } catch (e) {
               logToBackground(`Error parsing complete JSON: ${e.message}`, true);
@@ -410,6 +409,49 @@ async function streamGeminiResponse(messages) {
   } catch (error) {
     logToBackground(`Error in Gemini stream: ${error}`, true);
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Process and stream text with optimized chunk handling
+ * @param {string} text - Text to be streamed
+ * @returns {Promise<void>}
+ */
+async function streamTextInChunks(text) {
+  const CHUNK_SIZE = 6; // Process 6 characters at a time
+  const DELAY_MS = 5; // Smaller delay between chunks
+  
+  // Split text into chunks while preserving word boundaries
+  const words = text.split(/(\s+|\p{P}+)/u);
+  let currentChunk = '';
+  
+  for (const word of words) {
+    if (word.length <= CHUNK_SIZE) {
+      // Short words, spaces, and punctuation are sent as is
+      accumulatedResponse += word;
+      sendToContent({
+        action: 'updateStreamingResponse',
+        text: word,
+        isFinal: false
+      });
+      
+      // Only add delay for actual words, not spaces or punctuation
+      if (!/^[\s\p{P}]+$/u.test(word)) {
+        await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+      }
+    } else {
+      // Split longer words into chunks
+      for (let i = 0; i < word.length; i += CHUNK_SIZE) {
+        const chunk = word.slice(i, Math.min(i + CHUNK_SIZE, word.length));
+        accumulatedResponse += chunk;
+        sendToContent({
+          action: 'updateStreamingResponse',
+          text: chunk,
+          isFinal: false
+        });
+        await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+      }
+    }
   }
 }
 
