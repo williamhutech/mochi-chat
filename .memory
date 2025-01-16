@@ -359,3 +359,32 @@ Handles extension-wide functionality.
 
 - **Issue**: Missing important content
   **Solution**: Add specific selectors for common patterns
+
+### 4. Chrome Extension Tips
+
+1. **Keyboard Shortcuts**
+   - Always include "commands" permission in manifest.json
+   - Add detailed logging for command handling:
+     ```javascript
+     chrome.commands.onCommand.addListener((command) => {
+       // Log command received
+       // Log processing steps
+       // Log success/failure of message sending
+     });
+     ```
+   - Common issues:
+     * Missing "commands" permission
+     * Not handling chrome.runtime.lastError
+     * Not checking response from content script
+
+## Chrome Extension Debugging
+
+### Keyboard Shortcuts
+
+- **Debugging Tips**
+  - Use `chrome://extensions/` to inspect and reload extensions
+  - Enable developer mode to access debugging tools
+  - Use `chrome.runtime.reload()` to reload the extension
+  - Inspect background scripts and content scripts separately
+  - Use `console.log` statements to log messages and variables
+  - Use the Chrome DevTools debugger to set breakpoints and inspect variables

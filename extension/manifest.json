@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Mochi Chat",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Chat with your PDFs and websites using AI",
   "permissions": [
-    "activeTab"
+    "activeTab",
+    "commands"
   ],
   "host_permissions": [
     "https://api.openai.com/",

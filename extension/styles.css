@@ -1,5 +1,20 @@
+/* =============================================================================
+ * Mochi Chat Styles
+ * Core styles for the Mochi Chat extension interface
+ * ============================================================================= */
+
+/* Import Fonts
+ * -------------------------------------------------------------------------- */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap');
 
+/* Base Utility Classes
+ * -------------------------------------------------------------------------- */
+.mochi-hidden {
+  display: none !important;
+}
+
+/* Toggle Button
+ * -------------------------------------------------------------------------- */
 #mochi-chat-toggle-button {
   position: fixed;
   bottom: 20px;
@@ -30,10 +45,8 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
 }
 
-.mochi-hidden {
-  display: none !important;
-}
-
+/* Main Chat Container
+ * -------------------------------------------------------------------------- */
 #mochi-pdf-extractor-ui {
   position: fixed;
   bottom: 80px;
@@ -71,6 +84,8 @@
   background: #ffffff;
 }
 
+/* Header Section
+ * -------------------------------------------------------------------------- */
 #mochi-chat-header {
   display: flex;
   justify-content: space-between;
@@ -91,6 +106,8 @@
   align-items: center;
 }
 
+/* Header Buttons and Icons
+ * -------------------------------------------------------------------------- */
 #mochi-expand-button,
 #mochi-close-button {
   background: none;
@@ -110,12 +127,26 @@
   transition: all 0.2s ease;
 }
 
+#mochi-expand-button svg,
+#mochi-close-button svg {
+  color: #000000 !important;
+  fill: none !important;
+  stroke: currentColor !important;
+}
+
+#mochi-expand-button:hover svg,
+#mochi-close-button:hover svg {
+  color: #333333 !important;
+}
+
 #mochi-expand-button:hover,
 #mochi-close-button:hover {
   background: #f5f5f5;
   opacity: 1;
 }
 
+/* Output Field
+ * -------------------------------------------------------------------------- */
 #mochi-output-field {
   flex: 1;
   overflow-y: auto;
@@ -149,6 +180,32 @@
   word-wrap: break-word;
 }
 
+/* Markdown content styling */
+#mochi-output-field p {
+  margin: 0 0 10px 0;
+  font-family: 'Noto Sans', sans-serif;
+}
+
+#mochi-output-field ul, #mochi-output-field ol {
+  margin: 0 0 10px 0;
+  padding-left: 20px;
+}
+
+#mochi-output-field ul li, #mochi-output-field ol li {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+#mochi-output-field ul {
+  list-style-type: disc;
+}
+
+#mochi-output-field ol {
+  list-style-type: decimal;
+}
+
+/* Input Container
+ * -------------------------------------------------------------------------- */
 #mochi-input-container {
   padding: 14px;
 }
@@ -184,6 +241,8 @@
   padding-left: 4px;
 }
 
+/* Send Button
+ * -------------------------------------------------------------------------- */
 #mochi-send-button {
   background: none;
   border: none;
@@ -201,11 +260,23 @@
   opacity: 0.8;
 }
 
+#mochi-send-button svg {
+  color: #000000 !important;
+  fill: none !important;
+  stroke: currentColor !important;
+}
+
+#mochi-send-button:hover svg {
+  color: #333333 !important;
+}
+
 #mochi-send-button:hover {
   background: #f5f5f5;
   opacity: 1;
 }
 
+/* Loading State
+ * -------------------------------------------------------------------------- */
 #mochi-generating-button {
   width: 100%;
   padding: 8px;
@@ -219,31 +290,6 @@
   font-family: 'Noto Sans', sans-serif;
 }
 
-/* Markdown content styling */
-#mochi-output-field p {
-  margin: 0 0 10px 0;
-  font-family: 'Noto Sans', sans-serif;
-}
-
-#mochi-output-field ul, #mochi-output-field ol {
-  margin: 0 0 10px 0;
-  padding-left: 20px;
-}
-
-#mochi-output-field ul li, #mochi-output-field ol li {
-  margin-bottom: 4px;
-  line-height: 1.5;
-}
-
-#mochi-output-field ul {
-  list-style-type: disc;
-}
-
-#mochi-output-field ol {
-  list-style-type: decimal;
-}
-
-/* Loading dots animation */
 .mochi-loading-dots::after {
   content: '';
   animation: dots 1.5s steps(5, end) infinite;
@@ -256,10 +302,8 @@
   80%, 100% { content: '...'; }
 }
 
-.mochi-error {
-  color: red;
-}
-
+/* Page Links
+ * -------------------------------------------------------------------------- */
 .mochi-page-link {
   color: black;
   text-decoration: underline;
@@ -268,4 +312,10 @@
 
 .mochi-page-link:hover {
   color: #0D47A1;
+}
+
+/* Error States
+ * -------------------------------------------------------------------------- */
+.mochi-error {
+  color: red;
 }

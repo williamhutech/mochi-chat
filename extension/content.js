@@ -559,6 +559,12 @@ function handleStreamingUpdate(update) {
       // Ensure scroll to bottom
       outputField.scrollTop = outputField.scrollHeight;
       
+      // Focus the input field
+      const inputField = document.getElementById('mochi-prompt-input');
+      if (inputField) {
+        inputField.focus();
+      }
+      
       logToBackground('Processed final update');
     } else if (update.isFinal && !update.text) {
       // Handle final update without text
@@ -570,6 +576,12 @@ function handleStreamingUpdate(update) {
       
       // Ensure scroll to bottom
       outputField.scrollTop = outputField.scrollHeight;
+      
+      // Focus the input field
+      const inputField = document.getElementById('mochi-prompt-input');
+      if (inputField) {
+        inputField.focus();
+      }
       
       logToBackground('Processed final update without text');
     }

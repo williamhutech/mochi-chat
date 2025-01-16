@@ -9,13 +9,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #10A37F;
-            --text-color: #353740;
-            --secondary-text: #6E6E80;
+            --primary-color: #000000;
+            --text-color: #171717;
+            --secondary-text: #666666;
             --bg-color: #FFFFFF;
-            --border-color: #E5E5E5;
-            --hover-color: #0E906F;
-            --border-radius: 6px;
+            --border-color: #EAEAEA;
+            --hover-color: #2D2D2D;
+            --border-radius: 8px;
+            --box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
         * {
@@ -37,8 +38,8 @@
         }
 
         .container {
-            max-width: 540px;
-            padding: 2rem;
+            max-width: 1000px;
+            padding: 3rem 2rem;
             text-align: center;
         }
 
@@ -49,82 +50,113 @@
         }
 
         h1 {
-            font-size: 2rem;
+            font-size: 2.5rem;
             font-weight: 600;
             margin-bottom: 1rem;
             color: var(--text-color);
+            letter-spacing: -0.02em;
         }
 
         .subtitle {
-            font-size: 1.1rem;
+            font-size: 1.2rem;
             color: var(--secondary-text);
-            margin-bottom: 2.5rem;
+            margin-bottom: 3rem;
             line-height: 1.6;
-            padding: 0 1rem;
         }
 
-        .steps {
-            list-style: none;
-            text-align: left;
-            margin: 2.5rem 0;
+        .steps-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin: 0 auto 2.5rem;
+        }
+
+        .step-box {
+            background: var(--bg-color);
             border: 1px solid var(--border-color);
             border-radius: var(--border-radius);
-            padding: 0.5rem 0;
-        }
-
-        .steps li {
+            padding: 1.5rem;
+            text-align: left;
+            transition: all 0.2s ease;
+            box-shadow: var(--box-shadow);
             display: flex;
-            align-items: center;
-            padding: 1rem 1.5rem;
-            font-size: 1rem;
-            color: var(--text-color);
-        }
-
-        .steps li:not(:last-child) {
-            border-bottom: 1px solid var(--border-color);
+            flex-direction: column;
         }
 
         .step-number {
             color: var(--primary-color);
-            font-weight: 500;
-            margin-right: 1rem;
-            opacity: 0.9;
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+            display: block;
+        }
+
+        .step-content {
+            color: var(--text-color);
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 1.25rem;
+            flex-grow: 1;
+        }
+
+        kbd {
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.1);
+            color: var(--text-color);
+            display: inline-block;
+            font-family: monospace;
+            font-size: 0.9em;
+            line-height: 1.4;
+            margin: 0 0.1em;
+            padding: 0.1em 0.6em;
         }
 
         .btn {
             display: inline-block;
             background: var(--primary-color);
             color: white;
-            padding: 0.75rem 1.5rem;
+            padding: 0.75rem 1.75rem;
             border-radius: var(--border-radius);
             text-decoration: none;
             font-weight: 500;
             font-size: 1rem;
             border: none;
             cursor: pointer;
-            transition: background-color 0.15s ease;
+            transition: all 0.15s ease;
         }
 
         .btn:hover {
             background: var(--hover-color);
+            transform: translateY(-1px);
         }
 
-        @media (max-width: 640px) {
+        .happy-note {
+            font-size: 1rem;
+            color: var(--secondary-text);
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
             .container {
-                padding: 1.5rem;
+                padding: 2rem 1.5rem;
+            }
+
+            .steps-container {
+                grid-template-columns: 1fr;
+                gap: 1rem;
             }
 
             h1 {
-                font-size: 1.75rem;
+                font-size: 2rem;
             }
 
             .subtitle {
-                font-size: 1rem;
-                padding: 0;
-            }
-
-            .steps {
-                margin: 2rem 0;
+                font-size: 1.1rem;
+                margin-bottom: 2rem;
             }
         }
     </style>
@@ -134,29 +166,32 @@
         <div class="welcome-icon">🍡</div>
         <h1>Welcome to Mochi Chat</h1>
         <p class="subtitle">
-            Your AI-powered chat companion for PDFs and websites. Let's set up file access to unlock all features.
+            Your AI-powered chat companion for PDFs and websites. To get started:
         </p>
         
-        <ul class="steps">
-            <li>
-                <span class="step-number">1.</span>
-                <span>Click the button below to open extension settings</span>
-            </li>
-            <li>
-                <span class="step-number">2.</span>
-                <span>Enable "Allow access to file URLs" under Site access</span>
-            </li>
-            <li>
-                <span class="step-number">3.</span>
-                <span>Return to your PDF or webpage</span>
-            </li>
-            <li>
-                <span class="step-number">4.</span>
-                <span>Click the Mochi Chat icon to start chatting</span>
-            </li>
-        </ul>
+        <div class="steps-container">
+            <div class="step-box">
+                <span class="step-number">Step 1</span>
+                <p class="step-content">
+                    Click the button below to open extension settings and enable "Allow access to file URLs"
+                </p>
+                <button class="btn" id="openExtensions">Enable File Access</button>
+            </div>
+            <div class="step-box">
+                <span class="step-number">Step 2</span>
+                <p class="step-content">
+                    Return to any webpage or PDF
+                </p>
+            </div>
+            <div class="step-box">
+                <span class="step-number">Step 3</span>
+                <p class="step-content">
+                    Press <kbd>Command+K</kbd> (Mac) or <kbd>Ctrl+K</kbd> (Windows) to enable Mochi Chat
+                </p>
+            </div>
+        </div>
 
-        <button class="btn" id="openExtensions">Enable File Access</button>
+        <p class="happy-note">Happy chatting with Mochi! 🎉</p>
     </div>
 
     <script src="instructions.js"></script>

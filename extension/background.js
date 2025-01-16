@@ -150,13 +150,25 @@ chrome.commands.onCommand.addListener((command) => {
   logToConsole(`Keyboard command received: ${command}`);
   
   if (command === "toggle-chat") {
+    logToConsole('Processing toggle-chat command');
     chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
       if (tabs[0]) {
-        logToConsole('Sending toggle chat command to content script');
-        chrome.tabs.sendMessage(tabs[0].id, {action: "toggleChat"});
+        logToConsole(`Sending toggle chat command to tab ${tabs[0].id}`);
+        chrome.tabs.sendMessage(tabs[0].id, {action: "toggleChat"}, (response) => {
+          if (chrome.runtime.lastError) {
+            logToConsole(`Error sending message: ${chrome.runtime.lastError.message}`, true);
+          } else {
+            logToConsole('Toggle chat command sent successfully');
+          }
+        });
       } else {
         logToConsole('No active tab found for keyboard command', true);
       }
     });
+  } else {
+    logToConsole(`Unknown command received: ${command}`, true);
   }
 });
+
+// Log that keyboard command listener is initialized
+logToConsole('Keyboard command listener initialized');
