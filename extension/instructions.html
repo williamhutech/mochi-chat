@@ -35,12 +35,19 @@
             justify-content: center;
             align-items: center;
             -webkit-font-smoothing: antialiased;
+            margin: 0;
+            padding: 0;
         }
 
         .container {
             max-width: 1000px;
+            width: 100%;
             padding: 3rem 2rem;
             text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
         .welcome-icon {
@@ -69,6 +76,8 @@
             grid-template-columns: repeat(3, 1fr);
             gap: 2rem;
             margin: 0 auto 2.5rem;
+            width: 100%;
+            max-width: 1000px;
         }
 
         .step-box {
@@ -81,6 +90,9 @@
             box-shadow: var(--box-shadow);
             display: flex;
             flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            height: 100%;
         }
 
         .step-number {
@@ -99,6 +111,7 @@
             line-height: 1.6;
             margin-bottom: 1.25rem;
             flex-grow: 1;
+            text-align: left;
         }
 
         kbd {
@@ -180,7 +193,7 @@
             <div class="step-box">
                 <span class="step-number">Step 2</span>
                 <p class="step-content">
-                    Return to any webpage or PDF
+                    Open a new webpage or new PDF document on browser
                 </p>
             </div>
             <div class="step-box">

@@ -106,7 +106,7 @@ async function createChatInterface() {
   // Determine if we're on a PDF file or regular website
   const isPDF = document.contentType === 'application/pdf' || 
                 window.location.href.toLowerCase().endsWith('.pdf');
-  const title = isPDF ? 'Mochi Chat - PDF' : 'Mochi Chat - Website';
+  const title = isPDF ? 'Mochi Chat - PDF Mode' : 'Mochi Chat - Website Mode';
   
   // Create chat interface HTML structure
   chatInterface.innerHTML = `
