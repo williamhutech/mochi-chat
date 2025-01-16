@@ -2,6 +2,6 @@
 2. Using dynamic imports with chrome.runtime.getURL instead of static imports. 
 3. For each section of the code, include a comment of what it does and why it's necessary. Include the parameters of key function as well (i.e.  * @param {object} sender - Sender information for message passing, * @returns {object} Updated accumulated response and any error)
 4. Please think twice for removing any codes, as it may be already in use, or will be used in future. Do not overstep what you are doing.
-5. Every time you make edits based on the instructions, update .memory file with the new requirements. Treat it as a product requirement document that you are updating as you go. 
-6. For every single prompt from user, read through memory file and make sure you understand the previous requirements. If there are conflicting requirements, please ask the right questions to clarify rather than making direct edits.
+5. Every time you make edits based on the instructions, update memory file with the new requirements. Treat it as a product requirement document that you are updating as you go. 
+6. For every single prompt from user, read through .memory file and make sure you understand the previous requirements. If there are conflicting requirements, please ask the right questions to clarify rather than making direct edits.
 7. If there are issues/bugs that took a long time to resolve, at point of finding root cause and solving it, please update memory under Tips for Myself section. The purpose is so that you can refer in due time when you lost previous context so you do not make same error again and again.

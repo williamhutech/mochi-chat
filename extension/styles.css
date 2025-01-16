@@ -125,6 +125,28 @@
   color: #000000;
   font-family: 'Noto Sans', sans-serif;
   border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+  user-select: text;
+  -webkit-user-select: text;
+  max-width: 100%;
+  word-wrap: break-word;
+}
+
+#mochi-output-field * {
+  max-width: 100%;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+#mochi-output-field pre,
+#mochi-output-field code {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 #mochi-input-container {
@@ -219,27 +241,6 @@
 
 #mochi-output-field ol {
   list-style-type: decimal;
-}
-
-#mochi-output-field code {
-  background: rgba(0, 0, 0, 0.03);
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace;
-  font-size: 12px;
-}
-
-#mochi-output-field pre {
-  background: rgba(0, 0, 0, 0.03);
-  padding: 10px;
-  border-radius: 6px;
-  overflow-x: auto;
-  margin-bottom: 10px;
-}
-
-#mochi-output-field pre code {
-  background: none;
-  padding: 0;
 }
 
 /* Loading dots animation */

@@ -86,6 +86,11 @@ async function createChatInterface() {
   chatInterface.id = 'mochi-pdf-extractor-ui';
   chatInterface.classList.add('mochi-hidden');
   
+  // Prevent text selection issues with parent page
+  chatInterface.addEventListener('mousedown', (e) => e.stopPropagation());
+  chatInterface.addEventListener('mouseup', (e) => e.stopPropagation());
+  chatInterface.addEventListener('click', (e) => e.stopPropagation());
+  
   // Load Noto Sans font for consistent typography
   const fontLink = document.createElement('link');
   fontLink.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap';
