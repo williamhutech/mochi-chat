@@ -442,6 +442,20 @@ function createPageLinks(text) {
 }
 
 /**
+ * Check if content exceeds visible area and expand if needed
+ * @param {HTMLElement} outputField - The output field element
+ * @returns {void}
+ */
+function checkAndExpandContent(outputField) {
+  if (outputField.scrollHeight > outputField.clientHeight && chatInterface) {
+    if (!chatInterface.classList.contains('mochi-expanded')) {
+      chatInterface.classList.add('mochi-expanded');
+      logToBackground('Auto-expanded chat interface due to content overflow');
+    }
+  }
+}
+
+/**
  * Utility function to send logs to background script
  * @param {string} message - Message to log
  * @param {boolean} isError - Whether this is an error message
@@ -535,6 +549,9 @@ function handleStreamingUpdate(update) {
       const processedText = renderMarkdown(accumulatedResponse);
       outputField.innerHTML = processedText;
       
+      // Check if we need to auto-expand
+      checkAndExpandContent(outputField);
+      
       logToBackground(`Updated output with text: ${update.text}`);
     }
     
@@ -543,6 +560,9 @@ function handleStreamingUpdate(update) {
       // Process final text with page links
       const finalText = createPageLinks(outputField.innerHTML);
       outputField.innerHTML = finalText;
+      
+      // Check if we need to auto-expand
+      checkAndExpandContent(outputField);
       
       // Reset UI state
       promptWrapper.classList.remove('mochi-hidden');
