@@ -38,7 +38,7 @@ const AI_PROVIDERS = {
  * Current selected AI provider
  * @type {string}
  */
-const CURRENT_PROVIDER = AI_PROVIDERS.GEMINI;
+const CURRENT_PROVIDER = AI_PROVIDERS.OPENAI;
 
 /**
  * API Keys for different providers

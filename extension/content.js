@@ -103,10 +103,8 @@ async function createChatInterface() {
   styleLink.rel = 'stylesheet';
   document.head.appendChild(styleLink);
   
-  // Determine if we're on a PDF file or regular website
-  const isPDF = document.contentType === 'application/pdf' || 
-                window.location.href.toLowerCase().endsWith('.pdf');
-  const title = isPDF ? 'Mochi Chat - PDF Mode' : 'Mochi Chat - Website Mode';
+  // Load the title
+  const title = 'Mochi Chat';
   
   // Create chat interface HTML structure
   chatInterface.innerHTML = `
@@ -351,8 +349,6 @@ async function sendPrompt() {
     promptWrapper.classList.add('mochi-hidden');
     generatingButton.classList.remove('mochi-hidden');
     
-    outputField.scrollTop = outputField.scrollHeight;
-    
     // Clear input
     promptInput.value = '';
     
@@ -538,7 +534,6 @@ function handleStreamingUpdate(update) {
       accumulatedResponse += update.text;
       const processedText = renderMarkdown(accumulatedResponse);
       outputField.innerHTML = processedText;
-      outputField.scrollTop = outputField.scrollHeight;
       
       logToBackground(`Updated output with text: ${update.text}`);
     }
@@ -556,9 +551,6 @@ function handleStreamingUpdate(update) {
       // Reset accumulated response
       accumulatedResponse = '';
       
-      // Ensure scroll to bottom
-      outputField.scrollTop = outputField.scrollHeight;
-      
       // Focus the input field
       const inputField = document.getElementById('mochi-prompt-input');
       if (inputField) {
@@ -573,9 +565,6 @@ function handleStreamingUpdate(update) {
       
       // Reset accumulated response
       accumulatedResponse = '';
-      
-      // Ensure scroll to bottom
-      outputField.scrollTop = outputField.scrollHeight;
       
       // Focus the input field
       const inputField = document.getElementById('mochi-prompt-input');
