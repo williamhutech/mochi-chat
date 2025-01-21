@@ -121,43 +121,57 @@ function sendToContent(message) {
  * 4. Update history with completed conversation
  * 
  * @param {string} prompt - User's input prompt
+ * @param {string} [screenshot] - Optional base64 screenshot data URL
  * @returns {Promise<void>} Resolves when response is complete
  * @throws {Error} If response generation fails
  */
-export async function generateChatGPTResponse(prompt) {
-  accumulatedResponse = ''; // Reset at start
-  
+export async function generateChatGPTResponse(prompt, screenshot = null) {
   try {
-    logToBackground('Getting conversation history');
+    accumulatedResponse = '';
     const history = await getHistory();
     
-    if (history.length === 0) {
-      throw new Error('No conversation context available. Please extract text first.');
+    const messages = [];
+    
+    // Add history messages
+    for (const item of history) {
+      messages.push({ role: item.role, content: item.content });
     }
     
-    const messages = [
-      ...history,
-      { role: 'user', content: prompt }
-    ];
-    
-    let response;
-    if (CURRENT_PROVIDER === AI_PROVIDERS.GEMINI) {
-      logToBackground('Starting Gemini stream');
-      response = await streamGeminiResponse(messages);
+    // Add current prompt with screenshot if available
+    if (screenshot && CURRENT_PROVIDER === AI_PROVIDERS.OPENAI) {
+      messages.push({
+        role: 'user',
+        content: [
+          {
+            type: "text",
+            text: prompt
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: screenshot  // screenshot is already in data:image/jpeg;base64 format
+            }
+          }
+        ]
+      });
     } else {
-      logToBackground('Starting OpenAI stream');
-      response = await streamOpenAIResponse(messages);
+      messages.push({ role: 'user', content: prompt });
     }
     
-    if (response.success) {
-      logToBackground('Stream completed, adding to history');
-      await addToHistory([
-        { role: 'user', content: prompt },
-        { role: 'assistant', content: accumulatedResponse }
-      ]);
+    let result;
+    if (CURRENT_PROVIDER === AI_PROVIDERS.OPENAI) {
+      result = await streamOpenAIResponse(messages);
     } else {
-      throw new Error(response.error || `Failed to get response from ${CURRENT_PROVIDER}`);
+      result = await streamGeminiResponse(messages);
     }
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to generate response');
+    }
+    
+    // Add to history
+    await addToHistory({ role: 'user', content: prompt });
+    await addToHistory({ role: 'assistant', content: accumulatedResponse });
     
   } catch (error) {
     logToBackground(`Error generating response: ${error}`, true);
@@ -166,7 +180,6 @@ export async function generateChatGPTResponse(prompt) {
       error: error.message,
       isFinal: true
     });
-    throw error;
   }
 }
 

@@ -349,12 +349,26 @@ async function sendPrompt() {
     promptWrapper.classList.add('mochi-hidden');
     generatingButton.classList.remove('mochi-hidden');
     
+    // Capture screenshot - activeTab permission is granted on user interaction
+    const screenshot = await new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ action: 'captureVisibleTab' }, (response) => {
+        if (chrome.runtime.lastError) {
+          logToBackground(`Screenshot error: ${chrome.runtime.lastError.message}`, true);
+          // Don't reject - continue without screenshot
+          resolve(null);
+        } else {
+          logToBackground('Screenshot captured successfully');
+          resolve(response);
+        }
+      });
+    });
+    
     // Clear input
     promptInput.value = '';
     
     // Get chat module and generate response
     const chat = await loadChatModule();
-    await chat.generateChatGPTResponse(promptText);
+    await chat.generateChatGPTResponse(promptText, screenshot);
     
   } catch (error) {
     logToBackground(`Error sending prompt: ${error}`, true);
