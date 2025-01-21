@@ -24,6 +24,7 @@
  * @type {boolean} initialized - Initialization state flag
  * @type {Object} chatModule - Chat module reference
  * @type {string} accumulatedResponse - Accumulated response from chat.js
+ * @type {boolean} isDynamicWebApp - Flag to indicate if current page is a dynamic web application
  */
 let chatInterface = null;        
 let toggleButton = null;         
@@ -33,6 +34,7 @@ let lastResponse = '';
 let initialized = false;         
 let chatModule;                  
 let accumulatedResponse = '';    
+let isDynamicWebApp = false;     // Will be set during initialization
 
 //=============================================================================
 // Chat Toggle Button
@@ -349,19 +351,23 @@ async function sendPrompt() {
     promptWrapper.classList.add('mochi-hidden');
     generatingButton.classList.remove('mochi-hidden');
     
-    // Capture screenshot - activeTab permission is granted on user interaction
-    const screenshot = await new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ action: 'captureVisibleTab' }, (response) => {
-        if (chrome.runtime.lastError) {
-          logToBackground(`Screenshot error: ${chrome.runtime.lastError.message}`, true);
-          // Don't reject - continue without screenshot
-          resolve(null);
-        } else {
-          logToBackground('Screenshot captured successfully');
-          resolve(response);
-        }
+    let screenshot = null;
+    
+    // Only capture screenshot for dynamic web apps
+    if (isDynamicWebApp) {
+      logToBackground('[Mochi-Content] Capturing screenshot for dynamic web app');
+      screenshot = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ action: 'captureVisibleTab' }, (response) => {
+          if (chrome.runtime.lastError) {
+            logToBackground(`[Mochi-Content] Screenshot error: ${chrome.runtime.lastError.message}`, true);
+            resolve(null);
+          } else {
+            logToBackground('[Mochi-Content] Screenshot captured successfully');
+            resolve(response);
+          }
+        });
       });
-    });
+    }
     
     // Clear input
     promptInput.value = '';
@@ -371,7 +377,7 @@ async function sendPrompt() {
     await chat.generateChatGPTResponse(promptText, screenshot);
     
   } catch (error) {
-    logToBackground(`Error sending prompt: ${error}`, true);
+    logToBackground(`[Mochi-Content] Error sending prompt: ${error}`, true);
     showError('Failed to send prompt');
     resetUIState();
   }
@@ -616,6 +622,43 @@ function handleStreamingUpdate(update) {
 }
 
 //=============================================================================
+// Dynamic Web App Detection
+//=============================================================================
+
+/**
+ * Check if current page is a dynamic web application
+ * Uses patterns defined in dynamic-apps.js
+ * @returns {Promise<boolean>} True if current page matches dynamic app patterns
+ */
+async function checkIfDynamicWebApp() {
+  try {
+    const { DYNAMIC_APP_PATTERNS } = await import(chrome.runtime.getURL('./dynamic-apps.js'));
+    const currentUrl = window.location.href;
+    const currentDomain = window.location.hostname;
+    
+    logToBackground('[Mochi-Content] Checking if dynamic web app...');
+    
+    // Check if current site matches any pattern
+    const isDynamic = DYNAMIC_APP_PATTERNS.some(pattern => {
+      if (!currentDomain.includes(pattern.domain)) {
+        return false;
+      }
+      if (pattern.paths) {
+        return pattern.paths.some(path => currentUrl.includes(path));
+      }
+      return true;
+    });
+    
+    logToBackground(`[Mochi-Content] Dynamic web app check result: ${isDynamic}`);
+    return isDynamic;
+    
+  } catch (error) {
+    logToBackground(`[Mochi-Content] Error checking dynamic web app: ${error}`, true);
+    return false;
+  }
+}
+
+//=============================================================================
 // Initialization
 //=============================================================================
 
@@ -625,23 +668,25 @@ function handleStreamingUpdate(update) {
  * @returns {Promise<void>}
  */
 async function initializeContent() {
-  if (initialized) return;
-  initialized = true;
-  
   try {
+    logToBackground('[Mochi-Content] Initializing content script...');
+    
+    // Check if current page is a dynamic web app
+    isDynamicWebApp = await checkIfDynamicWebApp();
+    
     // Initialize UI components and extract text
     await Promise.all([
       initializeChatToggle(),
       createChatInterface(),
       hideChatInterface(),
-      extractPageText()
+      extractPageText(),
+      checkIfDynamicWebApp()
     ]);
     
-    logToBackground('Content script initialized successfully');
+    logToBackground('[Mochi-Content] Content script initialized successfully');
+    
   } catch (error) {
-    logToBackground(`Error in initialization: ${error}`, true);
-    initialized = false;
-    throw error;
+    logToBackground(`[Mochi-Content] Error initializing content: ${error}`, true);
   }
 }
 

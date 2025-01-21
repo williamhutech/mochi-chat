@@ -54,7 +54,8 @@
         "cmaps/*",
         "conversation.js",
         "styles.css",
-        "marked.min.js"
+        "marked.min.js",
+        "dynamic-apps.js"
       ],
       "matches": ["<all_urls>"]
     }

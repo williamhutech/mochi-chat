@@ -84,7 +84,7 @@ export function addExtractedText(extractedText) {
  * Add messages to conversation history
  * Appends new messages while preserving context
  * 
- * @param {Array<{role: string, content: string}>} messages - Array of message objects
+ * @param {Array<{role: string, content: string|Array}>} messages - Array of message objects
  * @returns {void}
  * @throws {Error} If no history exists or addition fails
  */
@@ -97,8 +97,19 @@ export function addToHistory(messages) {
       throw new Error(error);
     }
     
-    conversationHistory.push(...messages);
-    logToBackground(`Added to history. History now has ${messages.length} messages.`);
+    // Ensure messages is an array
+    const messagesToAdd = Array.isArray(messages) ? messages : [messages];
+    
+    // Add each message, handling both string and array content types
+    messagesToAdd.forEach(message => {
+      if (message && typeof message === 'object' && 'role' in message) {
+        conversationHistory.push(message);
+      } else {
+        logToBackground('Invalid message format: ' + JSON.stringify(message), true);
+      }
+    });
+    
+    logToBackground(`Added ${messagesToAdd.length} messages to history. Total: ${conversationHistory.length}`);
   } catch (error) {
     logToBackground('Failed to add to history: ' + error.message, true);
     throw error;
