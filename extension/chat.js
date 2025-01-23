@@ -428,8 +428,8 @@ async function streamGeminiResponse(messages) {
  * @returns {Promise<void>}
  */
 async function streamTextInChunks(text) {
-  const CHUNK_SIZE = 6; // Process 6 characters at a time
-  const DELAY_MS = 5; // Smaller delay between chunks
+  const CHUNK_SIZE = 3; // Reduced from 6 to 3 characters for smoother streaming
+  const DELAY_MS = 2; // Reduced from 5ms to 2ms for more frequent updates
   
   // Split text into chunks while preserving word boundaries
   const words = text.split(/(\s+|\p{P}+)/u);

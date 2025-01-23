@@ -215,6 +215,55 @@
  }
  
  /* -----------------------------------------------------------------------------
+  * LaTeX Math Styling
+  * --------------------------------------------------------------------------- */
+ .katex { 
+  font-size: inherit !important;
+  font-family: inherit !important;
+  line-height: inherit !important;
+}
+
+.katex .katex-html {
+  font-family: inherit !important;
+}
+
+.katex .mathnormal,
+.katex .mathit,
+.katex .mathbf,
+.katex .mathsf,
+.katex .mathtt,
+.katex .mathscr {
+  font-family: inherit !important;
+}
+
+.katex-display {
+  margin: 0.5em 0;
+  text-align: left;
+}
+
+.katex-display > .katex {
+  display: inline-block;
+  text-align: left;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+}
+
+/* Ensure operators and symbols are properly aligned */
+.katex .mrel,
+.katex .mbin {
+  font-family: inherit !important;
+  position: relative;
+  top: 0;
+}
+
+/* Ensure fractions are properly sized */
+.katex .mfrac {
+  font-size: 0.9em;
+}
+
+ /* -----------------------------------------------------------------------------
   * Input Container
   * - Subtle changes to borders and background for a cohesive look
   * --------------------------------------------------------------------------- */

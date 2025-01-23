@@ -37,8 +37,12 @@
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*", "file:///*"],
-      "js": ["content.js", "marked.min.js"],
-      "css": ["styles.css"],
+      "js": [
+        "content.js", 
+        "marked.min.js",
+        "katex.min.js"
+      ],
+      "css": ["styles.css", "katex.min.css"],
       "run_at": "document_idle"
     }
   ],

@@ -34,7 +34,7 @@ let lastResponse = '';
 let initialized = false;         
 let chatModule;                  
 let accumulatedResponse = '';    
-let isDynamicWebApp = false;     // Will be set during initialization
+let isDynamicWebApp = false;     
 
 /**
  * AI Provider configuration
@@ -366,8 +366,9 @@ async function extractPageText() {
 }
 
 /**
- * Enhance screenshot for optimal text extraction
+ * Enhance screenshot for optimal text extraction and GPT-4V processing
  * Optimized for performance while maintaining quality
+ * Includes smart dimension handling and background detection
  * 
  * @param {string} base64Image - Original screenshot in base64
  * @returns {Promise<string>} Enhanced base64 image
@@ -380,12 +381,36 @@ async function enhanceScreenshot(base64Image) {
       const tempCanvas = document.createElement('canvas');
       
       try {
-        const ctx = canvas.getContext('2d', { alpha: false }); // Optimization: disable alpha
-        canvas.width = img.width;
-        canvas.height = img.height;
+        // Calculate optimal dimensions while maintaining aspect ratio
+        const MAX_DIMENSION = 2048; // Max dimension for GPT-4V
+        const QUALITY_THRESHOLD = 800; // Min dimension for good quality
         
-        // Draw original image
-        ctx.drawImage(img, 0, 0);
+        let width = img.width;
+        let height = img.height;
+        const aspectRatio = width / height;
+
+        // Only resize if dimensions exceed MAX_DIMENSION
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+          if (width > height) {
+            width = MAX_DIMENSION;
+            height = Math.round(width / aspectRatio);
+          } else {
+            height = MAX_DIMENSION;
+            width = Math.round(height * aspectRatio);
+          }
+        }
+        // Don't resize if both dimensions are below QUALITY_THRESHOLD
+        else if (width < QUALITY_THRESHOLD && height < QUALITY_THRESHOLD) {
+          width = Math.min(width * 1.5, MAX_DIMENSION);
+          height = Math.min(height * 1.5, MAX_DIMENSION);
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d', { alpha: false }); // Optimization: disable alpha
+        
+        // Draw original image with new dimensions
+        ctx.drawImage(img, 0, 0, width, height);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imageData.data;
         
@@ -437,21 +462,24 @@ async function enhanceScreenshot(base64Image) {
                          brightness(${isDarkBackground ? '110%' : '100%'})`;
         tempCtx.drawImage(canvas, 0, 0);
         
-        logToBackground(`[Mochi-Content] Enhanced screenshot (${isDarkBackground ? 'dark' : 'light'} mode)`);
+        logToBackground(`[Mochi-Content] Enhanced screenshot (${isDarkBackground ? 'dark' : 'light'} mode) ${width}x${height}`);
         
-        // Output final image at maximum quality
-        const enhancedBase64 = tempCanvas.toDataURL('image/jpeg', 1.0);
+        // Output final image with optimal quality
+        const enhancedBase64 = tempCanvas.toDataURL('image/jpeg', 0.95);
         resolve(enhancedBase64);
         
       } catch (error) {
+        logToBackground(`[Mochi-Content] Error enhancing screenshot: ${error}`, true);
         reject(error);
       } finally {
         // Clean up canvas elements
         cleanupCanvases([canvas, tempCanvas]);
       }
     };
-    
-    img.onerror = reject;
+    img.onerror = (error) => {
+      logToBackground(`[Mochi-Content] Error loading image: ${error}`, true);
+      reject(error);
+    };
     img.src = base64Image;
   });
 }
@@ -572,9 +600,7 @@ async function sendPrompt() {
  * @returns {Promise<void>}
  */
 function handleStreamingUpdate(update) {
-  try {
-    logToBackground(`Processing update: ${JSON.stringify(update)}`);
-    
+  try {    
     // Get UI elements
     const outputField = document.getElementById('mochi-output-field');
     const promptWrapper = document.getElementById('mochi-prompt-wrapper');
@@ -618,6 +644,7 @@ function handleStreamingUpdate(update) {
       generatingButton.classList.add('mochi-hidden');
       
       // Reset accumulated response
+      logToBackground(accumulatedResponse) //delete later
       accumulatedResponse = '';
       
       // Focus the input field
@@ -656,17 +683,100 @@ function handleStreamingUpdate(update) {
 
 /**
  * Function to render markdown text with specific options
+ * Supports LaTeX math expressions using KaTeX
  * @param {string} text - Text to render as markdown
  * @returns {string} HTML string of rendered markdown
  */
 function renderMarkdown(text) {
+  // First, protect LaTeX blocks from markdown processing
+  const mathBlocks = [];
+  let blockId = 0;
+
+  // Helper function to add math block
+  const addMathBlock = (formula, isDisplay) => {
+    // Clean up the formula
+    formula = formula
+      .replace(/\\\\(?=[a-zA-Z{])/g, '\\') // Fix double backslashes before commands
+      .replace(/\\{2,}/g, '\\')            // Reduce multiple backslashes to single
+      .replace(/\n/g, ' ')                 // Replace newlines with spaces
+      .trim();
+    
+    const id = `MATH_${blockId++}`;
+    mathBlocks.push({ id, formula, isDisplay });
+    return id;
+  };
+
+  // Handle display math (\[ ... \] and $$ ... $$) first
+  text = text.replace(/\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$/g, (match, block1, block2) => {
+    const formula = (block1 || block2)?.trim();
+    if (!formula) return match;
+    return addMathBlock(formula, true);
+  });
+
+  // Handle inline math ($ ... $ and \( ... \))
+  text = text.replace(/\$([^\$\n]+?)\$|\\\(([\s\S]*?)\\\)/g, (match, block1, block2) => {
+    const formula = (block1 || block2)?.trim();
+    if (!formula) return match;
+    return addMathBlock(formula, false);
+  });
+
+  // Render markdown
   marked.setOptions({
     gfm: true,
     breaks: true,
     headerIds: false,
     mangle: false
   });
-  return marked.parse(text);
+  let html = marked.parse(text);
+
+  // Replace math blocks with rendered LaTeX
+  mathBlocks.forEach(({ id, formula, isDisplay }) => {
+    try {
+      // Validate formula before rendering
+      if (formula.length > 500) {
+        throw new Error('Formula too long');
+      }
+
+      const katexOptions = {
+        displayMode: isDisplay,
+        throwOnError: true, // Change to true to catch errors early
+        output: 'html',
+        strict: false,
+        trust: true,
+        maxSize: 300,
+        maxExpand: 1000,
+        macros: {
+          "\\approx": "\\mathbin{\\approx}",
+          "\\text": "\\textrm"
+        }
+      };
+
+      // Try rendering with KaTeX
+      const rendered = katex.renderToString(formula, katexOptions);
+      html = html.replace(id, rendered);
+    } catch (err) {
+      logToBackground(`[Mochi-Content] LaTeX error for '${formula}': ${err.message}`, true);
+      
+      // Simple fallback: convert to plain text with basic formatting
+      let fallback = formula
+        .replace(/\\text\{([^}]+)\}/g, '$1')
+        .replace(/\\approx/g, '≈')
+        .replace(/\\sqrt\{([^}]+)\}/g, '√($1)')
+        .replace(/\^2/g, '²')
+        .replace(/\^3/g, '³')
+        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)')
+        .replace(/[\\{}$]/g, '')
+        .trim();
+
+      if (isDisplay) {
+        html = html.replace(id, `<div class="katex-display"><span class="katex">${fallback}</span></div>`);
+      } else {
+        html = html.replace(id, `<span class="katex">${fallback}</span>`);
+      }
+    }
+  });
+
+  return html;
 }
 
 /**
