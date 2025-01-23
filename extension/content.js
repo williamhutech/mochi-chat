@@ -465,7 +465,7 @@ async function enhanceScreenshot(base64Image) {
         logToBackground(`[Mochi-Content] Enhanced screenshot (${isDarkBackground ? 'dark' : 'light'} mode) ${width}x${height}`);
         
         // Output final image with optimal quality
-        const enhancedBase64 = tempCanvas.toDataURL('image/jpeg', 0.95);
+        const enhancedBase64 = tempCanvas.toDataURL('image/jpeg', 1.0);
         resolve(enhancedBase64);
         
       } catch (error) {
@@ -683,22 +683,72 @@ function handleStreamingUpdate(update) {
 
 /**
  * Function to render markdown text with specific options
- * Supports LaTeX math expressions using KaTeX
+ * Supports LaTeX math expressions using KaTeX and markdown tables
  * @param {string} text - Text to render as markdown
  * @returns {string} HTML string of rendered markdown
  */
 function renderMarkdown(text) {
+  logToBackground('[Mochi-Content] Starting markdown rendering');
+  
   // First, protect LaTeX blocks from markdown processing
   const mathBlocks = [];
   let blockId = 0;
 
   // Helper function to add math block
   const addMathBlock = (formula, isDisplay) => {
-    // Clean up the formula
+    logToBackground(`[Mochi-Content] Processing math block ${blockId}: ${formula.substring(0, 50)}${formula.length > 50 ? '...' : ''}`);
+    
+    // Always convert to simple mathematical notation
     formula = formula
-      .replace(/\\\\(?=[a-zA-Z{])/g, '\\') // Fix double backslashes before commands
-      .replace(/\\{2,}/g, '\\')            // Reduce multiple backslashes to single
-      .replace(/\n/g, ' ')                 // Replace newlines with spaces
+      // Basic cleanup
+      .replace(/\\\\(?=[a-zA-Z{])/g, '\\')
+      .replace(/\\{2,}/g, '\\')
+      .replace(/\n/g, ' ')
+      .replace(/H/g, '')
+      .trim()
+      
+      // Convert text blocks first
+      .replace(/\\text\{([^{}]+)\}/g, '$1')
+      .replace(/\\textrm\{([^{}]+)\}/g, '$1')
+      
+      // Convert fractions to division
+      .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)')
+      
+      // Convert basic operators
+      .replace(/\\cdot/g, '×')
+      .replace(/\*/g, '×')
+      .replace(/\\times/g, '×')
+      .replace(/\\div/g, '÷')
+      
+      // Convert special symbols
+      .replace(/\\approx/g, '≈')
+      .replace(/\\pm/g, '±')
+      .replace(/\\neq/g, '≠')
+      .replace(/\\geq/g, '≥')
+      .replace(/\\leq/g, '≤')
+      .replace(/\\gt/g, '>')
+      .replace(/\\lt/g, '<')
+      
+      // Convert roots and powers
+      .replace(/\\sqrt\{([^{}]+)\}/g, '√($1)')
+      .replace(/\^(\d+|{[^{}]+})/g, '^$1')
+      
+      // Fix decimals and grouping
+      .replace(/([0-9]),([0-9])/g, '$1.$2')
+      .replace(/([0-9])\(/g, '$1×(')
+      .replace(/\)([0-9])/g, ')×$1')
+      
+      // Convert vertical bars
+      .replace(/\\vert/g, '|')
+      .replace(/\\Vert/g, '‖')
+      .replace(/\|\|/g, '‖')
+      
+      // Remove remaining LaTeX commands and braces
+      .replace(/\\[a-zA-Z]+/g, '')
+      .replace(/[{}]/g, '')
+      
+      // Clean up spaces
+      .replace(/\s+/g, ' ')
       .trim();
     
     const id = `MATH_${blockId++}`;
@@ -708,30 +758,72 @@ function renderMarkdown(text) {
 
   // Handle display math (\[ ... \] and $$ ... $$) first
   text = text.replace(/\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$/g, (match, block1, block2) => {
+    logToBackground('[Mochi-Content] Found display math block');
     const formula = (block1 || block2)?.trim();
     if (!formula) return match;
     return addMathBlock(formula, true);
   });
 
   // Handle inline math ($ ... $ and \( ... \))
-  text = text.replace(/\$([^\$\n]+?)\$|\\\(([\s\S]*?)\\\)/g, (match, block1, block2) => {
-    const formula = (block1 || block2)?.trim();
+  text = text.replace(/\$(\S[^\$\n]*?\S)\$|\$(\S)\$|\\\(([\s\S]*?)\\\)/g, (match, block1, block2, block3) => {
+    logToBackground('[Mochi-Content] Found inline math expression');
+    // If there's a space after the opening $ or before the closing $, treat as currency
+    if (match.startsWith('$ ') || match.endsWith(' $') || /\$\s*\d+/.test(match)) {
+      logToBackground('[Mochi-Content] Skipping currency value: ' + match);
+      return match;
+    }
+    const formula = (block1 || block2 || block3)?.trim();
     if (!formula) return match;
     return addMathBlock(formula, false);
   });
 
-  // Render markdown
+  // Configure marked options for tables and other features
   marked.setOptions({
     gfm: true,
     breaks: true,
     headerIds: false,
-    mangle: false
+    mangle: false,
+    tables: true,
+    renderer: new marked.Renderer()
   });
+
+  // Create custom renderer to handle tables
+  const renderer = {
+    table(header, body) {
+      return `<div class="table-wrapper"><table class="mochi-table">
+        <thead>${header}</thead>
+        <tbody>${body}</tbody>
+      </table></div>`;
+    },
+    tablerow(content) {
+      return `<tr>${content}</tr>`;
+    },
+    tablecell(content, { header, align }) {
+      const tag = header ? 'th' : 'td';
+      const alignAttr = align ? ` align="${align}"` : '';
+      return `<${tag}${alignAttr}>${content}</${tag}>`;
+    }
+  };
+
+  // Use the custom renderer
+  marked.use({ renderer });
+
+  // Render markdown
+  logToBackground('[Mochi-Content] Rendering markdown with ' + mathBlocks.length + ' math blocks');
   let html = marked.parse(text);
 
   // Replace math blocks with rendered LaTeX
   mathBlocks.forEach(({ id, formula, isDisplay }) => {
     try {
+      logToBackground(`[Mochi-Content] Attempting to render LaTeX for block ${id}:`);
+      logToBackground(`Formula: ${formula.substring(0, 100)}${formula.length > 100 ? '...' : ''}`);
+      logToBackground(`Display mode: ${isDisplay}, Length: ${formula.length}`);
+      
+      // Analyze formula complexity
+      const braceCount = (formula.match(/[\{\}]/g) || []).length;
+      const commandCount = (formula.match(/\\/g) || []).length;
+      logToBackground(`Complexity metrics - Braces: ${braceCount}, Commands: ${commandCount}`);
+      
       // Validate formula before rendering
       if (formula.length > 500) {
         throw new Error('Formula too long');
@@ -739,35 +831,42 @@ function renderMarkdown(text) {
 
       const katexOptions = {
         displayMode: isDisplay,
-        throwOnError: true, // Change to true to catch errors early
+        throwOnError: false, // Don't throw errors, fall back to text
         output: 'html',
         strict: false,
         trust: true,
-        maxSize: 300,
-        maxExpand: 1000,
-        macros: {
-          "\\approx": "\\mathbin{\\approx}",
-          "\\text": "\\textrm"
-        }
+        maxSize: 100,
+        maxExpand: 100,
+        macros: {} // No macros needed since we're using simple notation
       };
 
       // Try rendering with KaTeX
+      logToBackground('[Mochi-Content] Calling KaTeX.renderToString');
       const rendered = katex.renderToString(formula, katexOptions);
+      logToBackground('[Mochi-Content] KaTeX rendering successful');
       html = html.replace(id, rendered);
+      
     } catch (err) {
-      logToBackground(`[Mochi-Content] LaTeX error for '${formula}': ${err.message}`, true);
+      const errorDetails = {
+        message: err.message,
+        stack: err.stack,
+        formula: formula.substring(0, 100) + (formula.length > 100 ? '...' : ''),
+        formulaLength: formula.length
+      };
+      logToBackground(`[Mochi-Content] LaTeX error details: ${JSON.stringify(errorDetails, null, 2)}`, true);
       
       // Simple fallback: convert to plain text with basic formatting
       let fallback = formula
         .replace(/\\text\{([^}]+)\}/g, '$1')
         .replace(/\\approx/g, '≈')
-        .replace(/\\sqrt\{([^}]+)\}/g, '√($1)')
+        .replace(/\\sqrt\{([^{}]+)\}/g, '√($1)')
         .replace(/\^2/g, '²')
         .replace(/\^3/g, '³')
-        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)')
+        .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)')
         .replace(/[\\{}$]/g, '')
         .trim();
 
+      logToBackground('[Mochi-Content] Using fallback rendering');
       if (isDisplay) {
         html = html.replace(id, `<div class="katex-display"><span class="katex">${fallback}</span></div>`);
       } else {
@@ -776,6 +875,7 @@ function renderMarkdown(text) {
     }
   });
 
+  logToBackground('[Mochi-Content] Markdown rendering completed');
   return html;
 }
 
