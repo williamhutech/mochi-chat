@@ -36,43 +36,51 @@ let chatModule;
 let accumulatedResponse = '';    
 let isDynamicWebApp = false;     // Will be set during initialization
 
+/**
+ * AI Provider configuration
+ * Defines available providers and their models
+ */
+const AI_PROVIDERS = {
+  OPENAI: 'openai',
+  GEMINI: 'gemini'
+};
+
+/**
+ * AI Model configuration
+ * Models are selected based on whether the current page is a dynamic web app
+ */
+const AI_MODELS = {
+  [AI_PROVIDERS.OPENAI]: {
+    default: 'gpt-4o-mini',
+    webApp: 'gpt-4o'
+  },
+  [AI_PROVIDERS.GEMINI]: 'gemini-2.0-flash-exp'
+};
+
+let currentProvider = AI_PROVIDERS.OPENAI;
+let currentModel = AI_MODELS[AI_PROVIDERS.OPENAI].default;
+
 //=============================================================================
-// Chat Toggle Button
+// Core Module Loading
 //=============================================================================
 
 /**
- * Initialize chat toggle button
- * Creates and injects the toggle button for the chat interface
- * @throws {Error} If button creation or injection fails
+ * Load chat module dynamically
+ * Imports chat.js using chrome.runtime.getURL
  * @returns {Promise<void>}
  */
-async function initializeChatToggle() {
-  try {
-    if (!toggleButton) {
-      const button = document.createElement('div');
-      button.id = 'mochi-chat-toggle-button';
-      button.innerHTML = `
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
-      `;
-      
-      // Add click listener for toggle (of chrome extension)
-      button.addEventListener('click', toggleChatInterface);
-      
-      // Add to DOM and make visible
-      document.body.appendChild(button);
-      button.style.display = 'flex';  // Flex display for proper SVG centering
-      toggleButton = button;
-      logToBackground('Chat toggle button created and shown');
-    }
-  } catch (error) {
-    logToBackground(`Error initializing chat toggle: ${error}`, true);
+async function loadChatModule() {
+  if (!chatModule) {
+    const chatModuleUrl = chrome.runtime.getURL('chat.js');
+    const { generateChatGPTResponse } = await import(chatModuleUrl);
+    chatModule = { generateChatGPTResponse };
+    logToBackground('Chat module loaded');
   }
+  return chatModule;
 }
 
 //=============================================================================
-// Chat Interface Creation & Management
+// UI Components - Creation & Management
 //=============================================================================
 
 /**
@@ -161,6 +169,41 @@ async function createChatInterface() {
 }
 
 /**
+ * Initialize chat toggle button
+ * Creates and injects the toggle button for the chat interface
+ * @throws {Error} If button creation or injection fails
+ * @returns {Promise<void>}
+ */
+async function initializeChatToggle() {
+  try {
+    if (!toggleButton) {
+      const button = document.createElement('div');
+      button.id = 'mochi-chat-toggle-button';
+      button.innerHTML = `
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+      `;
+      
+      // Add click listener for toggle (of chrome extension)
+      button.addEventListener('click', toggleChatInterface);
+      
+      // Add to DOM and make visible
+      document.body.appendChild(button);
+      button.style.display = 'flex';  // Flex display for proper SVG centering
+      toggleButton = button;
+      logToBackground('Chat toggle button created and shown');
+    }
+  } catch (error) {
+    logToBackground(`Error initializing chat toggle: ${error}`, true);
+  }
+}
+
+//=============================================================================
+// UI State Management
+//=============================================================================
+
+/**
  * Toggle chat interface visibility
  * Used by both click and keyboard shortcuts
  * @returns {Promise<void>}
@@ -225,8 +268,19 @@ function toggleExpand() {
   }
 }
 
+/**
+ * Reset UI state after error
+ * Cleans up UI elements and resets flags
+ * @returns {void}
+ */
+function resetUIState() {
+  document.getElementById('mochi-prompt-wrapper').classList.remove('mochi-hidden');
+  document.getElementById('mochi-generating-button').classList.add('mochi-hidden');
+  document.getElementById('mochi-prompt-input').focus();
+}
+
 //=============================================================================
-// Text Extraction and Processing
+// Text Processing & Screenshot Handling
 //=============================================================================
 
 /**
@@ -311,24 +365,156 @@ async function extractPageText() {
   }
 }
 
-//=============================================================================
-// Chat and Response Handling
-//=============================================================================
+/**
+ * Enhance screenshot for optimal text extraction
+ * Optimized for performance while maintaining quality
+ * 
+ * @param {string} base64Image - Original screenshot in base64
+ * @returns {Promise<string>} Enhanced base64 image
+ */
+async function enhanceScreenshot(base64Image) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const tempCanvas = document.createElement('canvas');
+      
+      try {
+        const ctx = canvas.getContext('2d', { alpha: false }); // Optimization: disable alpha
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        // Draw original image
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        
+        // Fast background detection using sampling
+        let backgroundSum = 0;
+        const sampleSize = Math.floor(data.length / 400); // Sample 0.25% of pixels
+        for (let i = 0; i < data.length; i += sampleSize) {
+          backgroundSum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+        }
+        const isDarkBackground = (backgroundSum / (data.length / sampleSize)) < 128;
+        
+        // Optimized single-pass processing
+        const contrast = isDarkBackground ? 1.6 : 1.4;
+        const threshold = isDarkBackground ? 140 : 128;
+        
+        // Process in chunks for better performance
+        const chunkSize = 16384; // Process 4096 pixels at a time
+        for (let offset = 0; offset < data.length; offset += chunkSize) {
+          const end = Math.min(offset + chunkSize, data.length);
+          for (let i = offset; i < end; i += 4) {
+            // Combined grayscale and contrast adjustment
+            const grey = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+            let factor = (grey - threshold) * contrast + threshold;
+            
+            // Fast edge enhancement
+            if (Math.abs(grey - threshold) < 20) {
+              factor += isDarkBackground ? -15 : 15;
+            }
+            
+            // Apply to all channels at once
+            data[i] = data[i + 1] = data[i + 2] = 
+              isDarkBackground ? 
+              255 - Math.max(0, Math.min(255, factor)) : 
+              Math.max(0, Math.min(255, factor));
+          }
+        }
+        
+        // Apply sharpening using CSS filter instead of convolution
+        ctx.putImageData(imageData, 0, 0);
+        
+        // Create temporary canvas for filter application
+        const tempCtx = tempCanvas.getContext('2d', { alpha: false });
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        
+        // Apply filters using CSS (faster than convolution)
+        tempCtx.filter = `contrast(${isDarkBackground ? '160%' : '140%'}) 
+                         saturate(0%) 
+                         brightness(${isDarkBackground ? '110%' : '100%'})`;
+        tempCtx.drawImage(canvas, 0, 0);
+        
+        logToBackground(`[Mochi-Content] Enhanced screenshot (${isDarkBackground ? 'dark' : 'light'} mode)`);
+        
+        // Output final image at maximum quality
+        const enhancedBase64 = tempCanvas.toDataURL('image/jpeg', 1.0);
+        resolve(enhancedBase64);
+        
+      } catch (error) {
+        reject(error);
+      } finally {
+        // Clean up canvas elements
+        cleanupCanvases([canvas, tempCanvas]);
+      }
+    };
+    
+    img.onerror = reject;
+    img.src = base64Image;
+  });
+}
 
 /**
- * Load chat module dynamically
- * Imports chat.js using chrome.runtime.getURL
- * @returns {Promise<void>}
+ * Capture screen without chat interface
+ * Temporarily hides chat interface, captures screen, then restores state
+ * Uses minimal delay to make the transition almost unnoticeable
+ * 
+ * @returns {Promise<string>} Enhanced base64 encoded screenshot
  */
-async function loadChatModule() {
-  if (!chatModule) {
-    const chatModuleUrl = chrome.runtime.getURL('chat.js');
-    const { generateChatGPTResponse } = await import(chatModuleUrl);
-    chatModule = { generateChatGPTResponse };
-    logToBackground('Chat module loaded');
+async function captureScreenWithoutInterface() {
+  // Store current visibility state
+  const wasVisible = isInterfaceVisible;
+  
+  try {
+    // Hide interface if visible
+    if (wasVisible) {
+      // Use direct style manipulation for instant hide
+      chatInterface.style.display = 'none';
+      isInterfaceVisible = false;
+    }
+    
+    // Minimal delay for DOM update (5ms is typically sufficient)
+    await new Promise(resolve => setTimeout(resolve, 2));
+    
+    // Capture screen
+    const rawScreenshot = await chrome.runtime.sendMessage({ action: 'captureVisibleTab' });
+    
+    // Restore interface immediately if it was visible
+    if (wasVisible) {
+      chatInterface.style.display = '';
+      isInterfaceVisible = true;
+    }
+    
+    if (!rawScreenshot) {
+      throw new Error('Screenshot capture failed');
+    }
+
+    // Enhance the screenshot
+    try {
+      const enhancedScreenshot = await enhanceScreenshot(rawScreenshot);
+      logToBackground('[Mochi-Content] Screenshot enhanced successfully');
+      return enhancedScreenshot;
+    } catch (error) {
+      logToBackground('[Mochi-Content] Screenshot enhancement failed: ' + error.message, true);
+      return rawScreenshot; // Fallback to raw screenshot if enhancement fails
+    }
+    
+  } catch (error) {
+    // Ensure interface is restored even if capture fails
+    if (wasVisible) {
+      chatInterface.style.display = '';
+      isInterfaceVisible = true;
+    }
+    logToBackground('[Mochi-Content] Screen capture failed: ' + error.message, true);
+    throw error;
   }
-  return chatModule;
 }
+
+//=============================================================================
+// Chat Interaction & Response Handling
+//=============================================================================
 
 /**
  * Handle sending prompts to the AI
@@ -355,29 +541,8 @@ async function sendPrompt() {
     
     // Only capture screenshot for dynamic web apps
     if (isDynamicWebApp) {
-      hideChatInterface();
       logToBackground('[Mochi-Content] Capturing screenshot for dynamic web app');
-      const rawScreenshot = await new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action: 'captureVisibleTab' }, (response) => {
-          if (chrome.runtime.lastError) {
-            logToBackground(`[Mochi-Content] Screenshot error: ${chrome.runtime.lastError.message}`, true);
-            resolve(null);
-          } else {
-            logToBackground('[Mochi-Content] Screenshot captured successfully');
-            resolve(response);
-          }
-        });
-      });
-
-      if (rawScreenshot) {
-        try {
-          screenshot = await enhanceScreenshot(rawScreenshot);
-          logToBackground('[Mochi-Content] Screenshot enhanced successfully');
-        } catch (error) {
-          logToBackground(`[Mochi-Content] Screenshot enhancement failed: ${error}`, true);
-          screenshot = rawScreenshot; // Fallback to raw screenshot if enhancement fails
-        }
-      }
+      screenshot = await captureScreenWithoutInterface();
     }
     
     // Clear input
@@ -385,7 +550,10 @@ async function sendPrompt() {
     
     // Get chat module and generate response
     const chat = await loadChatModule();
-    await chat.generateChatGPTResponse(promptText, screenshot);
+    await chat.generateChatGPTResponse(promptText, screenshot, {
+      provider: AI_PROVIDERS.OPENAI,
+      model: isDynamicWebApp ? AI_MODELS[AI_PROVIDERS.OPENAI].webApp : AI_MODELS[AI_PROVIDERS.OPENAI].default
+    });
     
   } catch (error) {
     logToBackground(`[Mochi-Content] Error sending prompt: ${error}`, true);
@@ -393,156 +561,6 @@ async function sendPrompt() {
     resetUIState();
   }
 }
-
-/**
- * Reset UI state after error
- * Cleans up UI elements and resets flags
- * @returns {void}
- */
-function resetUIState() {
-  document.getElementById('mochi-prompt-wrapper').classList.remove('mochi-hidden');
-  document.getElementById('mochi-generating-button').classList.add('mochi-hidden');
-  document.getElementById('mochi-prompt-input').focus();
-}
-
-//=============================================================================
-// Utility Functions
-//=============================================================================
-
-/**
- * Function to render markdown text with specific options
- * @param {string} text - Text to render as markdown
- * @returns {string} HTML string of rendered markdown
- */
-function renderMarkdown(text) {
-  marked.setOptions({
-    gfm: true,
-    breaks: true,
-    headerIds: false,
-    mangle: false
-  });
-  return marked.parse(text);
-}
-
-/**
- * Function to create clickable page number links in the text
- * @param {string} text - Text to process for page numbers
- * @returns {string} Text with clickable page number links
- */
-function createPageLinks(text) {
-  const linkedText = text.replace(/Page\s+(\d+)/gi, (match, pageNum) => {
-    return `<a href="#" class="mochi-page-link" data-page="${pageNum}" style="color: black; text-decoration: underline; cursor: pointer;">Page ${pageNum}</a>`;
-  });
-  
-  // Add click event listener using event delegation
-  setTimeout(() => {
-    const outputField = document.getElementById('mochi-output-field');
-    if (outputField) {
-      outputField.addEventListener('click', (e) => {
-        if (e.target.classList.contains('mochi-page-link')) {
-          e.preventDefault();
-          const pageNum = parseInt(e.target.dataset.page, 10);
-          
-          // Check if we're in a PDF context
-          const isPDF = document.contentType === 'application/pdf' || 
-                       window.location.href.toLowerCase().endsWith('.pdf');
-          
-          if (isPDF) {
-            // Get the current URL and update it with the new page number
-            const currentUrl = window.location.href;
-            const baseUrl = currentUrl.split('#')[0]; // Remove any existing hash
-            const newUrl = `${baseUrl}#page=${pageNum}`;
-            
-            // First update the hash
-            window.location.hash = `page=${pageNum}`;
-            
-            // Then force a reload after a small delay
-            setTimeout(() => {
-              window.location.reload();
-            }, 100);
-          } else {
-            // Fallback to hash-based navigation for non-PDF pages
-            window.location.hash = `page=${pageNum}`;
-          }
-        }
-      });
-    }
-  }, 0);
-  
-  return linkedText;
-}
-
-/**
- * Check if content exceeds visible area and expand if needed
- * @param {HTMLElement} outputField - The output field element
- * @returns {void}
- */
-function checkAndExpandContent(outputField) {
-  if (outputField.scrollHeight > outputField.clientHeight && chatInterface) {
-    if (!chatInterface.classList.contains('mochi-expanded')) {
-      chatInterface.classList.add('mochi-expanded');
-      logToBackground('Auto-expanded chat interface due to content overflow');
-    }
-  }
-}
-
-/**
- * Utility function to send logs to background script
- * @param {string} message - Message to log
- * @param {boolean} isError - Whether this is an error message
- * @returns {void}
- */
-function logToBackground(message, isError = false) {
-  chrome.runtime.sendMessage({
-    action: 'logFromContent',
-    message: message,
-    source: 'Mochi-Content',
-    isError
-  });
-}
-
-/**
- * Function to show error message in UI
- * @param {string} message - Error message to display
- * @returns {void}
- */
-function showError(message) {
-  showChatInterface(`<p class="mochi-error">${message}</p>`);
-}
-
-//=============================================================================
-// Message Handling
-//=============================================================================
-
-// Add event listeners for chat updates
-window.addEventListener('mochiChatUpdate', (event) => {
-  const message = event.detail;
-  logToBackground(`Received direct update: ${message.action}`);
-  
-  if (message.action === 'updateStreamingResponse') {
-    handleStreamingUpdate(message);
-  }
-});
-
-// Keep the chrome.runtime.onMessage listener for other extension messages
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  logToBackground(`Received extension message: ${message.action}`);
-  
-  switch (message.action) {
-    case "toggleChat":
-      toggleChatInterface();
-      break;
-      
-    case "logFromContent":
-      logToBackground(message.message, message.isError);
-      break;
-  }
-  
-  // Send response to acknowledge receipt
-  if (sendResponse) {
-    sendResponse({ received: true });
-  }
-});
 
 /**
  * Handle streaming response updates from chat.js
@@ -633,6 +651,126 @@ function handleStreamingUpdate(update) {
 }
 
 //=============================================================================
+// UI Utility Functions
+//=============================================================================
+
+/**
+ * Function to render markdown text with specific options
+ * @param {string} text - Text to render as markdown
+ * @returns {string} HTML string of rendered markdown
+ */
+function renderMarkdown(text) {
+  marked.setOptions({
+    gfm: true,
+    breaks: true,
+    headerIds: false,
+    mangle: false
+  });
+  return marked.parse(text);
+}
+
+/**
+ * Function to create clickable page number links in the text
+ * @param {string} text - Text to process for page numbers
+ * @returns {string} Text with clickable page number links
+ */
+function createPageLinks(text) {
+  const linkedText = text.replace(/Page\s+(\d+)/gi, (match, pageNum) => {
+    return `<a href="#" class="mochi-page-link" data-page="${pageNum}" style="color: black; text-decoration: underline; cursor: pointer;">Page ${pageNum}</a>`;
+  });
+  
+  // Add click event listener using event delegation
+  setTimeout(() => {
+    const outputField = document.getElementById('mochi-output-field');
+    if (outputField) {
+      outputField.addEventListener('click', (e) => {
+        if (e.target.classList.contains('mochi-page-link')) {
+          e.preventDefault();
+          const pageNum = parseInt(e.target.dataset.page, 10);
+          
+          // Check if we're in a PDF context
+          const isPDF = document.contentType === 'application/pdf' || 
+                       window.location.href.toLowerCase().endsWith('.pdf');
+          
+          if (isPDF) {
+            // Get the current URL and update it with the new page number
+            const currentUrl = window.location.href;
+            const baseUrl = currentUrl.split('#')[0]; // Remove any existing hash
+            const newUrl = `${baseUrl}#page=${pageNum}`;
+            
+            // First update the hash
+            window.location.hash = `page=${pageNum}`;
+            
+            // Then force a reload after a small delay
+            setTimeout(() => {
+              window.location.reload();
+            }, 100);
+          } else {
+            // Fallback to hash-based navigation for non-PDF pages
+            window.location.hash = `page=${pageNum}`;
+          }
+        }
+      });
+    }
+  }, 0);
+  
+  return linkedText;
+}
+
+/**
+ * Check if content exceeds visible area and expand if needed
+ * @param {HTMLElement} outputField - The output field element
+ * @returns {void}
+ */
+function checkAndExpandContent(outputField) {
+  if (outputField.scrollHeight > outputField.clientHeight && chatInterface) {
+    if (!chatInterface.classList.contains('mochi-expanded')) {
+      chatInterface.classList.add('mochi-expanded');
+      logToBackground('Auto-expanded chat interface due to content overflow');
+    }
+  }
+}
+
+/**
+ * Clean up canvas elements to free memory
+ * @param {HTMLCanvasElement[]} canvases - Array of canvas elements to clean
+ */
+function cleanupCanvases(canvases) {
+  canvases.forEach(canvas => {
+    canvas.width = canvas.height = 0;  // Clear canvas data
+    canvas.remove();  // Remove from DOM
+  });
+}
+
+//=============================================================================
+// Error Handling & Logging
+//=============================================================================
+
+/**
+ * Utility function to send logs to background script
+ * @param {string} message - Message to log
+ * @param {boolean} isError - Whether this is an error message
+ * @returns {void}
+ */
+function logToBackground(message, isError = false) {
+  chrome.runtime.sendMessage({
+    action: 'logFromContent',
+    message: message,
+    source: 'Mochi-Content',
+    isError
+  });
+}
+
+/**
+ * Function to show error message in UI
+ * @param {string} message - Error message to display
+ * @returns {void}
+ */
+function showError(message) {
+  showChatInterface(`<p class="mochi-error">${message}</p>`);
+}
+
+//=============================================================================
 // Dynamic Web App Detection
 //=============================================================================
 
@@ -660,14 +798,59 @@ async function checkIfDynamicWebApp() {
       return true;
     });
     
+    // Update provider and model based on web app detection
+    if (isDynamic) {
+      currentProvider = AI_PROVIDERS.OPENAI;
+      currentModel = AI_MODELS[AI_PROVIDERS.OPENAI].webApp;
+      logToBackground('[Mochi-Content] Dynamic web app detected, using gpt-4o model');
+    } else {
+      currentProvider = AI_PROVIDERS.OPENAI;
+      currentModel = AI_MODELS[AI_PROVIDERS.OPENAI].default;
+      logToBackground('[Mochi-Content] Standard web page, using gpt-4o-mini model');
+    }
+    
     logToBackground(`[Mochi-Content] Dynamic web app check result: ${isDynamic}`);
     return isDynamic;
     
   } catch (error) {
-    logToBackground(`[Mochi-Content] Error checking dynamic web app: ${error}`, true);
+    logToBackground('[Mochi-Content] Error checking dynamic web app status: ' + error.message, true);
     return false;
   }
 }
+
+//=============================================================================
+// Message Handling
+//=============================================================================
+
+// Add event listeners for chat updates
+window.addEventListener('mochiChatUpdate', (event) => {
+  const message = event.detail;
+  logToBackground(`Received direct update: ${message.action}`);
+  
+  if (message.action === 'updateStreamingResponse') {
+    handleStreamingUpdate(message);
+  }
+});
+
+// Keep the chrome.runtime.onMessage listener for other extension messages
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  logToBackground(`Received extension message: ${message.action}`);
+  
+  switch (message.action) {
+    case "toggleChat":
+      toggleChatInterface();
+      break;
+      
+    case "logFromContent":
+      logToBackground(message.message, message.isError);
+      break;
+  }
+  
+  // Send response to acknowledge receipt
+  if (sendResponse) {
+    sendResponse({ received: true });
+  }
+});
 
 //=============================================================================
 // Initialization
@@ -706,91 +889,4 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializeContent);
 } else {
   initializeContent();
-}
-
-/**
- * Enhance screenshot for optimal text extraction
- * Optimized for performance while maintaining quality
- * 
- * @param {string} base64Image - Original screenshot in base64
- * @returns {Promise<string>} Enhanced base64 image
- */
-async function enhanceScreenshot(base64Image) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d', { alpha: false }); // Optimization: disable alpha
-        canvas.width = img.width;
-        canvas.height = img.height;
-        
-        // Draw original image
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        
-        // Fast background detection using sampling
-        let backgroundSum = 0;
-        const sampleSize = Math.floor(data.length / 400); // Sample 0.25% of pixels
-        for (let i = 0; i < data.length; i += sampleSize) {
-          backgroundSum += (data[i] + data[i + 1] + data[i + 2]) / 3;
-        }
-        const isDarkBackground = (backgroundSum / (data.length / sampleSize)) < 128;
-        
-        // Optimized single-pass processing
-        const contrast = isDarkBackground ? 1.6 : 1.4;
-        const threshold = isDarkBackground ? 140 : 128;
-        
-        // Process in chunks for better performance
-        const chunkSize = 16384; // Process 4096 pixels at a time
-        for (let offset = 0; offset < data.length; offset += chunkSize) {
-          const end = Math.min(offset + chunkSize, data.length);
-          for (let i = offset; i < end; i += 4) {
-            // Combined grayscale and contrast adjustment
-            const grey = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
-            let factor = (grey - threshold) * contrast + threshold;
-            
-            // Fast edge enhancement
-            if (Math.abs(grey - threshold) < 20) {
-              factor += isDarkBackground ? -15 : 15;
-            }
-            
-            // Apply to all channels at once
-            data[i] = data[i + 1] = data[i + 2] = 
-              isDarkBackground ? 
-              255 - Math.max(0, Math.min(255, factor)) : 
-              Math.max(0, Math.min(255, factor));
-          }
-        }
-        
-        // Apply sharpening using CSS filter instead of convolution
-        ctx.putImageData(imageData, 0, 0);
-        
-        // Create temporary canvas for filter application
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d', { alpha: false });
-        tempCanvas.width = canvas.width;
-        tempCanvas.height = canvas.height;
-        
-        // Apply filters using CSS (faster than convolution)
-        tempCtx.filter = `contrast(${isDarkBackground ? '160%' : '140%'}) 
-                         saturate(0%) 
-                         brightness(${isDarkBackground ? '110%' : '100%'})`;
-        tempCtx.drawImage(canvas, 0, 0);
-        
-        logToBackground(`[Mochi-Content] Enhanced screenshot (${isDarkBackground ? 'dark' : 'light'} mode)`);
-        
-        // Output final image
-        const enhancedBase64 = tempCanvas.toDataURL('image/jpeg', 0.92);
-        resolve(enhancedBase64);
-        
-      } catch (error) {
-        reject(error);
-      }
-    };
-    
-    img.onerror = reject;
-    img.src = base64Image;
-  });
 }

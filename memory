@@ -1,0 +1,293 @@
+# Mochi Chat - Product Requirements Document
+
+## 1. Product Overview
+
+### 1.1 Description
+Mochi Chat is a Chrome extension that provides an intelligent chat interface for interacting with web content and PDFs. It features a floating chat UI that can be toggled and positioned anywhere on the webpage.
+
+### 1.2 Key Features
+- Floating chat interface with toggle functionality
+- PDF and webpage content extraction
+- Real-time AI-powered responses
+- Screenshot capture and enhancement
+- Dynamic web app detection
+- Streaming text responses
+
+### 1.3 Target Users
+- Users who need to interact with and extract information from PDFs
+- Users who want to analyze and understand web content
+- Users requiring AI assistance while browsing
+
+## 2. Technical Architecture
+
+### 2.1 Component Structure
+```
+extension/
+├── manifest.json           # Extension configuration
+├── content.js             # Main content script
+├── background.js          # Background service worker
+├── chat.js               # Chat functionality module
+├── conversation.js       # Conversation management
+├── extract-text.js       # Text extraction module
+└── styles.css            # UI styling
+```
+
+### 2.2 Component Interactions
+1. Content Script (content.js)
+   - Manages UI and user interactions
+   - Coordinates between components
+   - Handles screenshot capture
+   - Manages state and visibility
+
+2. Background Script (background.js)
+   - Handles extension lifecycle
+   - Manages permissions
+   - Processes PDF files
+   - Handles cross-origin requests
+
+3. Chat Module (chat.js)
+   - Manages AI provider integration
+   - Handles response streaming
+   - Processes user prompts
+   - Manages conversation flow
+
+4. Text Extractor (extract-text.js)
+   - Extracts content from PDFs
+   - Processes webpage content
+   - Handles text cleaning
+   - Manages content selection
+
+## 3. User Interface Requirements
+
+### 3.1 Chat Interface
+1. Toggle Button
+   - Fixed position on screen
+   - SVG chat icon
+   - Hover effects
+   - Click to show/hide chat
+
+2. Chat Window
+   - Draggable position
+   - Expandable/collapsible
+   - Semi-transparent background
+   - Smooth animations
+
+3. Input Area
+   - Text input field
+   - Send button
+   - Loading indicator
+   - Error state handling
+
+4. Output Area
+   - Markdown rendering
+   - Code block support
+   - Clickable page links
+   - Auto-scroll
+
+### 3.2 Visual Design
+1. Typography
+   - Font: Noto Sans
+   - Weights: 400, 500, 600
+   - Consistent line height
+   - Readable contrast
+
+2. Colors
+   - Primary: Extension theme color
+   - Secondary: UI element colors
+   - Error: Error message colors
+   - Background: Semi-transparent
+
+3. Icons
+   - SVG format
+   - Consistent stroke width
+   - Clear hover states
+   - Proper sizing
+
+## 4. Functional Requirements
+
+### 4.1 Content Extraction
+1. PDF Processing
+   - Local file support
+   - Remote PDF support
+   - Password detection
+   - Page-by-page processing
+
+2. Web Content
+   - Semantic element selection
+   - Dynamic content handling
+   - Duplicate removal
+   - Content cleaning
+
+### 4.2 Screenshot Capture
+1. Interface Management
+   - Hide chat UI during capture
+   - 2ms transition delay
+   - Immediate restoration
+   - State preservation
+
+2. Processing
+   - Image enhancement
+   - Quality optimization
+   - Error handling
+   - Fallback mechanisms
+
+### 4.3 AI Integration
+1. OpenAI Provider
+   - Default provider for all interactions
+   - Model Selection:
+     * Standard pages: gpt-4o-mini
+     * Dynamic web apps: gpt-4o
+   - Token streaming
+   - Rate limiting
+   - Error recovery
+   - Context management
+
+2. Gemini Provider
+   - Available as fallback
+   - Chunk processing (6-char)
+   - 5ms display delay
+   - JSON handling
+   - Error management
+
+### 4.4 Provider Selection Logic
+1. Default Configuration
+   - Provider: OpenAI
+   - Model: gpt-4o-mini
+   - Used for standard web pages
+
+2. Dynamic Web App Detection
+   - Provider: OpenAI
+   - Model: gpt-4o
+   - Triggered when page matches dynamic app patterns
+   - Patterns defined in dynamic-apps.js
+
+3. Implementation Details
+   - Provider/model config stored in content.js
+   - Selected during page initialization
+   - Updated based on web app detection
+   - Passed to chat.js for API calls
+
+## 5. Code Organization Standards
+
+### 5.1 File Structure
+Each JavaScript file must follow this organization:
+1. Global State
+2. Core Module Loading
+3. UI Components
+4. UI State Management
+5. Text Processing & Screenshot
+6. Chat Interaction
+7. Error Handling & Logging
+8. Dynamic Web App Detection
+9. Message Handling
+10. Initialization
+
+### 5.2 Code Standards
+1. Imports
+   ```javascript
+   // Use dynamic imports
+   const module = await import(chrome.runtime.getURL('./module.js'));
+   ```
+
+2. Error Handling
+   ```javascript
+   try {
+     // Operation
+     logToBackground('[Mochi-Module] Operation successful');
+   } catch (error) {
+     logToBackground('[Mochi-Module] Error: ${error.message}', true);
+     throw error;
+   }
+   ```
+
+3. Section Headers
+   ```javascript
+   //=============================================================================
+   // Section Name
+   //=============================================================================
+   ```
+
+## 6. Development Guidelines
+
+### 6.1 Logging Standards
+1. Format: `[YYYY-MM-DDTHH:mm:ssZ] [Mochi-Module] Message`
+2. Module Identifiers:
+   - [Mochi-Background]
+   - [Mochi-Content]
+   - [Mochi-Chat]
+   - [Mochi-Extract]
+
+### 6.2 Code Safety
+1. Preserve existing code
+2. Document changes
+3. Maintain compatibility
+4. Handle edge cases
+
+### 6.3 Performance
+1. Memory Management
+   - Clear unused resources
+   - Process in chunks
+   - Handle large files
+   - Clean up DOM elements
+
+2. UI Responsiveness
+   - Smooth animations
+   - Quick transitions
+   - Clear feedback
+   - Loading states
+
+## 7. Testing Requirements
+
+### 7.1 Functionality Testing
+1. UI Components
+   - Toggle functionality
+   - Window positioning
+   - Input handling
+   - Response display
+
+2. Content Processing
+   - PDF extraction
+   - Web content handling
+   - Screenshot capture
+   - Text enhancement
+
+### 7.2 Error Scenarios
+1. Network Issues
+   - API failures
+   - PDF loading errors
+   - Connection timeouts
+   - Recovery handling
+
+2. Content Issues
+   - Invalid PDFs
+   - Dynamic content
+   - Large files
+   - Special characters
+
+## 8. Maintenance
+
+### 8.1 Documentation
+1. Update this PRD with new requirements
+2. Document bug fixes
+3. Track known issues
+4. Maintain change log
+
+### 8.2 Code Reviews
+1. Check against standards
+2. Verify error handling
+3. Test edge cases
+4. Validate performance
+
+## 9. Known Issues & Solutions
+
+*Document critical issues and solutions here for reference*
+
+### 9.1 UI State
+- Issue: Interface state inconsistency after errors
+- Solution: Implement comprehensive state management
+- Prevention: Use try-finally blocks
+
+### 9.2 Screenshots
+- Issue: Enhancement failures
+- Solution: Implement fallback mechanism
+- Prevention: Validate image data

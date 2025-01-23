@@ -111,67 +111,52 @@ function sendToContent(message) {
 //=============================================================================
 
 /**
- * Generate chat response using selected AI provider
- * Main entry point for chat functionality
+ * Generate response using ChatGPT
+ * Manages the streaming connection and response handling
  * 
- * Process:
- * 1. Reset accumulated response
- * 2. Get conversation history
- * 3. Stream response from selected provider
- * 4. Update history with completed conversation
- * 
- * @param {string} prompt - User's input prompt
- * @param {string} [screenshot] - Optional base64 screenshot data URL
- * @returns {Promise<void>} Resolves when response is complete
- * @throws {Error} If response generation fails
+ * @param {string} prompt - User input prompt
+ * @param {string} [screenshot] - Optional screenshot data URL
+ * @param {Object} config - AI configuration
+ * @param {string} config.provider - AI provider to use
+ * @param {string} config.model - Model to use for this request
+ * @returns {Promise<void>}
  */
-export async function generateChatGPTResponse(prompt, screenshot = null) {
+export async function generateChatGPTResponse(prompt, screenshot, config) {
   try {
+    // Reset accumulated response
     accumulatedResponse = '';
-    const history = await getHistory();
     
+    // Get conversation history
+    const history = await getHistory();
     const messages = [];
     
-    // Add history messages
+    // Add history items
     for (const item of history) {
       messages.push({ role: item.role, content: item.content });
     }
     
     // Add current prompt with screenshot if available
-    if (screenshot && CURRENT_PROVIDER === AI_PROVIDERS.OPENAI) {
-      logToBackground(`[Mochi-Chat] Received screenshot data URL: ${screenshot}`);
+    if (screenshot) {
       messages.push({
         role: 'user',
         content: [
-          {
-            type: "text",
-            text: prompt
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: screenshot
-            }
-          }
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: { url: screenshot } }
         ]
       });
     } else {
       messages.push({ role: 'user', content: prompt });
     }
     
-    let result;
-    if (CURRENT_PROVIDER === AI_PROVIDERS.OPENAI) {
-      result = await streamOpenAIResponse(messages);
-    } else {
-      result = await streamGeminiResponse(messages);
-    }
-    
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to generate response');
+    // Stream response based on provider
+    if (config.provider === AI_PROVIDERS.OPENAI) {
+      await streamOpenAIResponse(messages, config.model);
+    } else if (config.provider === AI_PROVIDERS.GEMINI) {
+      await streamGeminiResponse(messages);
     }
     
     // Add to history with proper message format
-    if (screenshot && CURRENT_PROVIDER === AI_PROVIDERS.OPENAI) {
+    if (screenshot) {
       await addToHistory({
         role: 'user',
         content: [
@@ -241,10 +226,11 @@ function processStreamChunk(chunk) {
  * 4. Send updates to UI
  * 
  * @param {Array<Object>} messages - Array of message objects for OpenAI
+ * @param {string} model - The OpenAI model to use
  * @returns {Promise<Object>} Object indicating success or failure
  * @throws {Error} If streaming fails
  */
-async function streamOpenAIResponse(messages) {
+async function streamOpenAIResponse(messages, model) {
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -253,7 +239,7 @@ async function streamOpenAIResponse(messages) {
         'Authorization': `Bearer ${API_KEYS[AI_PROVIDERS.OPENAI]}`
       },
       body: JSON.stringify({
-        model: AI_MODELS[AI_PROVIDERS.OPENAI],
+        model: model,
         messages,
         stream: true
       })
