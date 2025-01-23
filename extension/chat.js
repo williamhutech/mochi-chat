@@ -52,7 +52,7 @@ const API_KEYS = {
  * Model configuration for different providers
  */
 const AI_MODELS = {
-  [AI_PROVIDERS.OPENAI]: 'gpt-4o-mini',
+  [AI_PROVIDERS.OPENAI]: 'gpt-4o',
   [AI_PROVIDERS.GEMINI]: 'gemini-2.0-flash-exp'
 };
 
@@ -139,6 +139,7 @@ export async function generateChatGPTResponse(prompt, screenshot = null) {
     
     // Add current prompt with screenshot if available
     if (screenshot && CURRENT_PROVIDER === AI_PROVIDERS.OPENAI) {
+      logToBackground(`[Mochi-Chat] Received screenshot data URL: ${screenshot}`);
       messages.push({
         role: 'user',
         content: [
@@ -149,7 +150,7 @@ export async function generateChatGPTResponse(prompt, screenshot = null) {
           {
             type: "image_url",
             image_url: {
-              url: screenshot  // screenshot is already in data:image/jpeg;base64 format
+              url: screenshot
             }
           }
         ]
@@ -169,8 +170,18 @@ export async function generateChatGPTResponse(prompt, screenshot = null) {
       throw new Error(result.error || 'Failed to generate response');
     }
     
-    // Add to history
-    await addToHistory({ role: 'user', content: prompt });
+    // Add to history with proper message format
+    if (screenshot && CURRENT_PROVIDER === AI_PROVIDERS.OPENAI) {
+      await addToHistory({
+        role: 'user',
+        content: [
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: { url: screenshot } }
+        ]
+      });
+    } else {
+      await addToHistory({ role: 'user', content: prompt });
+    }
     await addToHistory({ role: 'assistant', content: accumulatedResponse });
     
   } catch (error) {

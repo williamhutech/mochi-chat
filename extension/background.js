@@ -102,14 +102,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
       
     case "captureVisibleTab":
-      chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 70 }, (dataUrl) => {
+      chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 100 }, (dataUrl) => {
         if (chrome.runtime.lastError) {
           console.error('[Mochi-Background] Screenshot error:', chrome.runtime.lastError);
           sendResponse(null);
         } else {
           console.log('[Mochi-Background] Screenshot captured successfully');
           sendResponse(dataUrl);
-          logToConsole(dataUrl);
         }
       });
       return true;

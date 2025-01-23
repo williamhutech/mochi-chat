@@ -83,6 +83,7 @@ export function addExtractedText(extractedText) {
 /**
  * Add messages to conversation history
  * Appends new messages while preserving context
+ * Handles both simple text messages and complex formats (text + image)
  * 
  * @param {Array<{role: string, content: string|Array}>} messages - Array of message objects
  * @returns {void}
@@ -103,7 +104,12 @@ export function addToHistory(messages) {
     // Add each message, handling both string and array content types
     messagesToAdd.forEach(message => {
       if (message && typeof message === 'object' && 'role' in message) {
+        // For complex messages (like those with screenshots), preserve the entire structure
         conversationHistory.push(message);
+        
+        // Log the type of message being added
+        const contentType = Array.isArray(message.content) ? 'complex' : 'text';
+        logToBackground(`Added ${contentType} message from ${message.role}`);
       } else {
         logToBackground('Invalid message format: ' + JSON.stringify(message), true);
       }

@@ -355,8 +355,9 @@ async function sendPrompt() {
     
     // Only capture screenshot for dynamic web apps
     if (isDynamicWebApp) {
+      hideChatInterface();
       logToBackground('[Mochi-Content] Capturing screenshot for dynamic web app');
-      screenshot = await new Promise((resolve) => {
+      const rawScreenshot = await new Promise((resolve) => {
         chrome.runtime.sendMessage({ action: 'captureVisibleTab' }, (response) => {
           if (chrome.runtime.lastError) {
             logToBackground(`[Mochi-Content] Screenshot error: ${chrome.runtime.lastError.message}`, true);
@@ -367,6 +368,16 @@ async function sendPrompt() {
           }
         });
       });
+
+      if (rawScreenshot) {
+        try {
+          screenshot = await enhanceScreenshot(rawScreenshot);
+          logToBackground('[Mochi-Content] Screenshot enhanced successfully');
+        } catch (error) {
+          logToBackground(`[Mochi-Content] Screenshot enhancement failed: ${error}`, true);
+          screenshot = rawScreenshot; // Fallback to raw screenshot if enhancement fails
+        }
+      }
     }
     
     // Clear input
@@ -695,4 +706,91 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializeContent);
 } else {
   initializeContent();
+}
+
+/**
+ * Enhance screenshot for optimal text extraction
+ * Optimized for performance while maintaining quality
+ * 
+ * @param {string} base64Image - Original screenshot in base64
+ * @returns {Promise<string>} Enhanced base64 image
+ */
+async function enhanceScreenshot(base64Image) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { alpha: false }); // Optimization: disable alpha
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        // Draw original image
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        
+        // Fast background detection using sampling
+        let backgroundSum = 0;
+        const sampleSize = Math.floor(data.length / 400); // Sample 0.25% of pixels
+        for (let i = 0; i < data.length; i += sampleSize) {
+          backgroundSum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+        }
+        const isDarkBackground = (backgroundSum / (data.length / sampleSize)) < 128;
+        
+        // Optimized single-pass processing
+        const contrast = isDarkBackground ? 1.6 : 1.4;
+        const threshold = isDarkBackground ? 140 : 128;
+        
+        // Process in chunks for better performance
+        const chunkSize = 16384; // Process 4096 pixels at a time
+        for (let offset = 0; offset < data.length; offset += chunkSize) {
+          const end = Math.min(offset + chunkSize, data.length);
+          for (let i = offset; i < end; i += 4) {
+            // Combined grayscale and contrast adjustment
+            const grey = (data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114);
+            let factor = (grey - threshold) * contrast + threshold;
+            
+            // Fast edge enhancement
+            if (Math.abs(grey - threshold) < 20) {
+              factor += isDarkBackground ? -15 : 15;
+            }
+            
+            // Apply to all channels at once
+            data[i] = data[i + 1] = data[i + 2] = 
+              isDarkBackground ? 
+              255 - Math.max(0, Math.min(255, factor)) : 
+              Math.max(0, Math.min(255, factor));
+          }
+        }
+        
+        // Apply sharpening using CSS filter instead of convolution
+        ctx.putImageData(imageData, 0, 0);
+        
+        // Create temporary canvas for filter application
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d', { alpha: false });
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        
+        // Apply filters using CSS (faster than convolution)
+        tempCtx.filter = `contrast(${isDarkBackground ? '160%' : '140%'}) 
+                         saturate(0%) 
+                         brightness(${isDarkBackground ? '110%' : '100%'})`;
+        tempCtx.drawImage(canvas, 0, 0);
+        
+        logToBackground(`[Mochi-Content] Enhanced screenshot (${isDarkBackground ? 'dark' : 'light'} mode)`);
+        
+        // Output final image
+        const enhancedBase64 = tempCanvas.toDataURL('image/jpeg', 0.92);
+        resolve(enhancedBase64);
+        
+      } catch (error) {
+        reject(error);
+      }
+    };
+    
+    img.onerror = reject;
+    img.src = base64Image;
+  });
 }
