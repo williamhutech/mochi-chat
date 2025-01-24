@@ -237,30 +237,38 @@
 }
 
 .katex-display {
-  margin: 0.5em 0;
+  margin: 0.5em 0 !important;  /* Reduce vertical spacing between math blocks */
+  overflow-x: auto;
+  overflow-y: hidden;
   text-align: left;
 }
 
 .katex-display > .katex {
-  display: inline-block;
   text-align: left;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 0.25em 0;
 }
 
-/* Ensure operators and symbols are properly aligned */
-.katex .mrel,
-.katex .mbin {
-  font-family: inherit !important;
+.katex {
+  font-size: 1.1em;
+  line-height: 1.5;
+}
+
+/* Adjust spacing for multi-line equations */
+.katex-display .katex-html {
+  display: block;
   position: relative;
-  top: 0;
 }
 
-/* Ensure fractions are properly sized */
-.katex .mfrac {
-  font-size: 0.9em;
+.katex-display .base {
+  margin: 0.25em 0;
+}
+
+ /* Code formatting in math context */
+code {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  background-color: rgba(175, 184, 193, 0.2);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-size: 0.95em;
 }
 
  /* -----------------------------------------------------------------------------
@@ -268,35 +276,33 @@
   * --------------------------------------------------------------------------- */
  .table-wrapper {
    overflow-x: auto;
-   margin: 1rem 0;
+   margin: 0.5em 0;
  }
 
  .mochi-table {
-   width: 100%;
    border-collapse: collapse;
-   margin: 0;
-   padding: 0;
-   font-size: 0.9em;
+   width: 100%;
+   font-size: 0.9em;  /* Decreased font size */
+   line-height: 1.4;
  }
 
  .mochi-table th,
  .mochi-table td {
-   padding: 8px 12px;
-   text-align: left;
+   padding: 0.4em 0.6em;
    border: 1px solid #ddd;
+   text-align: left;
  }
 
- .mochi-table thead th {
+ .mochi-table th {
    background-color: #f5f5f5;
    font-weight: 600;
-   border-bottom: 2px solid #ddd;
  }
 
- .mochi-table tbody tr:nth-child(even) {
-   background-color: #f9f9f9;
+ .mochi-table tr:nth-child(even) {
+   background-color: #fafafa;
  }
 
- .mochi-table tbody tr:hover {
+ .mochi-table tr:hover {
    background-color: #f0f0f0;
  }
 

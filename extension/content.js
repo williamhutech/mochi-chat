@@ -698,18 +698,55 @@ function renderMarkdown(text) {
   const addMathBlock = (formula, isDisplay) => {
     logToBackground(`[Mochi-Content] Processing math block ${blockId}: ${formula.substring(0, 50)}${formula.length > 50 ? '...' : ''}`);
     
+    // Combine consecutive display math blocks
+    if (isDisplay) {
+      // First remove any existing \quad or \, spacing
+      formula = formula.replace(/\\quad\s*/g, ' ').replace(/\\,\s*/g, ' ');
+      
+      // If we detect multiple display math blocks, combine them
+      if (formula.includes('\\]') && formula.includes('\\[')) {
+        formula = formula
+          .replace(/\\\]\s*\\\[/g, ',\\quad ')  // Replace ]\s*[ with ,\quad
+          .replace(/\s*\\\]\s*\\\[\s*/g, ',\\quad ')  // Clean up any remaining spaces
+          .replace(/,\s*,/g, ',')  // Clean up double commas
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+    }
+    
+    // Remove align environments and convert to simple equations
+    if (formula.includes('\\begin{align')) {
+      formula = formula
+        .replace(/\\begin\{align\*?\}([\s\S]*?)\\end\{align\*?\}/g, (_, content) => {
+          return content
+            .split('\\\\')
+            .map(line => line.trim()
+              .replace(/&=/g, '=')
+              .replace(/&/g, '')
+              .trim()
+            )
+            .filter(line => line)
+            .join(',\\quad ');  // Use \quad for spacing between lines
+        });
+    }
+    
     // Always convert to simple mathematical notation
     formula = formula
       // Basic cleanup
       .replace(/\\\\(?=[a-zA-Z{])/g, '\\')
       .replace(/\\{2,}/g, '\\')
-      .replace(/\n/g, ' ')
+      .replace(/([^\\])\n/g, '$1 ')
       .replace(/H/g, '')
       .trim()
       
-      // Convert text blocks first
-      .replace(/\\text\{([^{}]+)\}/g, '$1')
-      .replace(/\\textrm\{([^{}]+)\}/g, '$1')
+      // Handle text blocks with proper spacing
+      .replace(/\\text\{([^{}]+)\}/g, (_, text) => {
+        const spacedText = text
+          .replace(/([a-z])([A-Z])/g, '$1 $2')
+          .replace(/\s+/g, ' ')
+          .trim();
+        return `\\text{${spacedText}}`;
+      })
       
       // Convert fractions to division
       .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)')
@@ -743,9 +780,9 @@ function renderMarkdown(text) {
       .replace(/\\Vert/g, '‖')
       .replace(/\|\|/g, '‖')
       
-      // Remove remaining LaTeX commands and braces
-      .replace(/\\[a-zA-Z]+/g, '')
-      .replace(/[{}]/g, '')
+      // Remove remaining LaTeX commands except text and spacing
+      .replace(/\\([a-zA-Z]+)(?![{a-zA-Z])/g, (match, cmd) => 
+        ['text', 'quad'].includes(cmd) ? match : '')
       
       // Clean up spaces
       .replace(/\s+/g, ' ')
@@ -802,6 +839,11 @@ function renderMarkdown(text) {
       const tag = header ? 'th' : 'td';
       const alignAttr = align ? ` align="${align}"` : '';
       return `<${tag}${alignAttr}>${content}</${tag}>`;
+    },
+    // Custom link renderer to open in new tab
+    link(href, title, text) {
+      const titleAttr = title ? ` title="${title}"` : '';
+      return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
     }
   };
 
@@ -831,13 +873,15 @@ function renderMarkdown(text) {
 
       const katexOptions = {
         displayMode: isDisplay,
-        throwOnError: false, // Don't throw errors, fall back to text
+        throwOnError: false,
         output: 'html',
         strict: false,
         trust: true,
         maxSize: 100,
         maxExpand: 100,
-        macros: {} // No macros needed since we're using simple notation
+        macros: {
+          "\\approx": "\\mathbin{\\approx}"  // Only keep approx macro for proper spacing
+        }
       };
 
       // Try rendering with KaTeX
@@ -857,7 +901,7 @@ function renderMarkdown(text) {
       
       // Simple fallback: convert to plain text with basic formatting
       let fallback = formula
-        .replace(/\\text\{([^}]+)\}/g, '$1')
+        .replace(/\\text\{([^{}]+)\}/g, '$1')
         .replace(/\\approx/g, '≈')
         .replace(/\\sqrt\{([^{}]+)\}/g, '√($1)')
         .replace(/\^2/g, '²')
