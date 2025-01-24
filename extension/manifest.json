@@ -7,9 +7,11 @@
   "icons": {
     "16": "logo16.png",
     "48": "logo48.png",
+    "50": "logo50.png",
     "128": "logo128.png"
   },
   "permissions": [
+    "storage",
     "activeTab",
     "commands"
   ],
@@ -23,7 +25,10 @@
     "type": "module"
   },
   "action": {
-    "default_popup": "extension-popup.html"
+    "default_popup": "extension-popup.html",
+    "default_icon": {
+      "48": "logo48.png"
+    }
   },
   "commands": {
     "toggle-chat": {

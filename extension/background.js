@@ -135,17 +135,27 @@ chrome.action.onClicked.addListener((tab) => {
  * @param {string} details.reason - Event reason: 'install', 'update', 'chrome_update', 'shared_module_update'
  * @param {string} details.previousVersion - Previous version (for updates only)
  */
-chrome.runtime.onInstalled.addListener((details) => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   switch (details.reason) {
     case 'install':
       logToConsole('Extension installed for the first time');
+      // Initialize with normal icon
+      chrome.action.setIcon({ path: 'logo48.png' });
+      await chrome.storage.local.set({ hasUnreadUpdate: false });
+      
+      // Open instructions page on install
       chrome.tabs.create({
         url: chrome.runtime.getURL('instructions.html')
       });
       break;
       
     case 'update':
-      logToConsole(`Extension updated from version ${details.previousVersion}`);
+      logToConsole(`[Mochi-Background] Extension updated from version ${details.previousVersion}`);
+      logToConsole('[Mochi-Background] Setting notification icon');
+      // Set notification icon when extension updates
+      chrome.action.setIcon({ path: 'logo50.png' });
+      // Store the notification state
+      await chrome.storage.local.set({ hasUnreadUpdate: true });
       break;
   }
 });

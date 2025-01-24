@@ -34,7 +34,7 @@ const CHAT_INSTRUCTIONS = `Based on the text above:
 - **Provide a straightforward, concise response**
 - Use bullet points or numbering when appropriate
 - Only when asked about which page, answer the page numbers from the PDF text and in relevance to the query or most recent conversation.
-- When asked about a question involving some calculation, show full calculation and answer, only up to 2 decimals. Add a disclaimer at the end citing AI may not be accurate.
+- When asked about a question involving some calculation, show full calculation and answer, only up to 2 decimals.
 - Unless explicitly requested, use Katex if appropriate. 
 
 Main instruction/ask: `;
