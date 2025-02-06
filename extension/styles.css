@@ -16,35 +16,142 @@
  }
  
  /* -----------------------------------------------------------------------------
-  * Toggle Button (unchanged except for any minor tweaks if you want)
+  * Chat Input Container (replaces toggle button)
   * --------------------------------------------------------------------------- */
- #mochi-chat-toggle-button {
+ #mochi-chat-input-container {
    position: fixed;
    bottom: 20px;
    left: 20px;
-   width: 44px;
-   height: 44px;
-   background: #ffffff;
-   border-radius: 6px;
+   width: 180px; /* Initial smaller width */
+   box-sizing: border-box;
+   padding: 8px;
+   background-color: rgba(241, 241, 241, 0.68);
+   backdrop-filter: blur(24px);
+   border-radius: 24px;
+   display: flex;
+   align-items: center;
+   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+   z-index: 2147483647;
+   transform: scale(1);
+   transition: transform 0.2s ease-out, width 0.2s ease-out;
+ }
+
+ #mochi-chat-input-container:hover {
+   transform: scale(1.01);
+   transition: transform 0.2s ease-in;
+ }
+
+ #mochi-chat-input-container:focus-within {
+   width: 300px;
+   transition: width 0.2s ease-out;
+ }
+
+ #mochi-chat-input-container #mochi-chat-input-field {
+   flex: 1 !important;
+   height: 32px !important;
+   background: transparent !important;
+   border: none !important;
+   margin-left: 13px !important;
+   margin-right: 10px !important;
+   padding: 0 !important;
+   font-family: 'Noto Sans', sans-serif !important;
+   font-size: 13px !important;
+   line-height: 20px !important;
+   font-weight: 400 !important;
+   color: rgba(0, 0, 0, 0.6) !important;
+   width: calc(100% - 44px) !important;
+   outline: none !important;
+   box-shadow: none !important;
+   -webkit-appearance: none !important;
+   -moz-appearance: none !important;
+   appearance: none !important;
+ }
+
+ #mochi-chat-input-container.has-content #mochi-chat-input-field {
+   color: rgb(0, 0, 0) !important;
+ }
+
+ #mochi-chat-input-container #mochi-chat-input-field:focus {
+   outline: none !important;
+   box-shadow: none !important;
+   border: none !important;
+   background: transparent !important;
+ }
+
+ #mochi-chat-input-container #mochi-chat-input-field::placeholder {
+   color: rgba(0, 0, 0, 0.4) !important;
+   opacity: 1 !important;
+ }
+
+ #mochi-chat-submit-button {
+   flex: 0 0 auto;
+   width: 32px;
+   height: 32px;
+   border-radius: 9999px;
+   background-color: rgba(0, 0, 0, 0.44);
+   border: none;
+   padding: 0;
+   position: relative;
+   cursor: pointer;
+   color: rgba(255, 255, 255, 0.9);
    display: flex;
    align-items: center;
    justify-content: center;
-   cursor: pointer;
-   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-   transition: all 0.2s;
-   z-index: 10000;
-   color: #000000;
+   transition: background-color 0.2s ease, color 0.2s ease;
  }
- 
- #mochi-chat-toggle-button svg {
-   width: 26px;
-   height: 26px;
+
+ #mochi-chat-input-container.has-content #mochi-chat-submit-button {
+   background-color: rgb(0, 0, 0);
+   color: rgb(255, 255, 255);
  }
- 
- #mochi-chat-toggle-button:hover {
-   background: rgb(253, 253, 253);
-   transform: translateY(-1px);
-   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+
+ #mochi-chat-submit-button:disabled {
+   background-color: rgba(0, 0, 0, 0.44);
+   color: rgba(255, 255, 255, 0.6);
+   cursor: default;
+ }
+
+ #mochi-chat-submit-button svg {
+   width: 32px;
+   height: 32px;
+   display: block;
+ }
+
+ /* Loading State */
+ #mochi-chat-submit-button.loading svg {
+   display: none;
+ }
+
+ #mochi-chat-submit-button .loader {
+   display: none;
+ }
+
+ #mochi-chat-submit-button.loading .loader {
+   display: inline-block;
+ }
+
+ #mochi-chat-submit-button.loading {
+   background-color: rgb(0, 0, 0);
+ }
+
+ .loader {
+   width: 16px;
+   height: 16px;
+   border-radius: 50%;
+   display: inline-block;
+   border-top: 2px solid #FFF;
+   border-right: 2px solid transparent;
+   box-sizing: border-box;
+   animation: rotation 0.5s linear infinite;
+ }
+
+ @keyframes rotation {
+   0% {
+     transform: rotate(0deg);
+   }
+   100% {
+     transform: rotate(360deg);
+   }
  }
  
  /* -----------------------------------------------------------------------------
@@ -62,7 +169,7 @@
    border-width: 20px;
    overflow: hidden;
    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-   z-index: 10000;
+   z-index: 2147483647;
    font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, sans-serif;
    opacity: 0;
    transform: translateY(20px);
@@ -157,25 +264,26 @@
   * - Give it a partially translucent white, small shadow, and slightly more padding
   * --------------------------------------------------------------------------- */
  #mochi-output-field {
-   flex: 1;
-   overflow-y: auto;
-   background-color: rgba(255, 255, 255, 0.85);
-   margin: 0px;
-   padding: 0px 20px;
-   font-size: 12px;
-   color: rgb(13, 13, 13);
-   font-family: 'Noto Sans', sans-serif;
-   border-radius: 8px;
-   user-select: text;
-   -webkit-user-select: text;
-   max-width: 100%;
-   word-wrap: break-word;
+   flex: 1 !important;
+   overflow-y: auto !important;
+   background-color: rgba(255, 255, 255, 0.85) !important;
+   margin: 0px !important;
+   padding: 0px 20px 20px !important;
+   font-size: 12px !important;
+   color: rgb(13, 13, 13) !important;
+   font-family: 'Noto Sans', sans-serif !important;
+   border-radius: 8px !important;
+   user-select: text !important;
+   -webkit-user-select: text !important;
+   max-width: 100% !important;
+   word-wrap: break-word !important;
+   text-align: left !important;
  }
  
  #mochi-output-field * {
-   max-width: 100%;
+   max-width: 100% !important;
    font-size: 12px !important;
-   line-height: 1.5 !important;
+   line-height: 20px !important;
    user-select: text !important;
    -webkit-user-select: text !important;
  }
@@ -183,35 +291,35 @@
  /* Monospace code blocks remain basically the same */
  #mochi-output-field pre,
  #mochi-output-field code {
-   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
-   font-size: 12px !important;
-   line-height: 1.45 !important;
-   overflow-x: auto;
-   white-space: pre-wrap;
-   word-wrap: break-word;
+   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace !important;
+   font-size: 11px !important;
+   line-height: 20px !important;
+   overflow-x: auto !important;
+   white-space: pre-wrap !important;
+   word-wrap: break-word !important;
  }
  
  /* Markdown content styling */
  #mochi-output-field p {
-   margin: 0 0 10px 0;
+   margin: 0 0 10px 0 !important;
  }
  
  #mochi-output-field ul, #mochi-output-field ol {
-   margin: 0 0 10px 0;
-   padding-left: 20px;
+   margin: 0 0 10px 0 !important;
+   padding-left: 20px !important;
  }
  
  #mochi-output-field ul li, #mochi-output-field ol li {
-   margin-bottom: 4px;
-   line-height: 1.5;
+   margin-bottom: 4px !important;
+   line-height: 1.5 !important;
  }
  
  #mochi-output-field ul {
-   list-style-type: disc;
+   list-style-type: disc !important;
  }
  
  #mochi-output-field ol {
-   list-style-type: decimal;
+   list-style-type: decimal !important;
  }
  
  /* -----------------------------------------------------------------------------
@@ -306,103 +414,10 @@ code {
    background-color: #f0f0f0;
  }
 
- /* -----------------------------------------------------------------------------
-  * Input Container
-  * - Subtle changes to borders and background for a cohesive look
-  * --------------------------------------------------------------------------- */
- #mochi-input-container {
-   padding: 14px;
- }
  
- #mochi-prompt-wrapper {
-   display: flex;
-   gap: 8px;
-   background: rgb(244, 244, 244);
-   border-radius: 6px;
-   padding: 6px 8px;
-   align-items: center;
- }
- 
- #mochi-prompt-input {
-   flex: 1;
-   border: none;
-   background: rgb(244, 244, 244); /* so it shows the prompt-wrapper background behind */
-   padding: 6px 0 6px 4px;
-   font-size: 13px;
-   color: rgb(0, 0, 0);
-   outline: none;
-   font-family: 'Noto Sans', sans-serif;
- }
- 
- #mochi-prompt-input:focus {
-   outline: none;
-   box-shadow: none;
- }
- 
- #mochi-prompt-input::placeholder {
-   color: rgb(93, 93, 93);
-   padding-left: 4px;
- }
- 
- /* Send Button */
- #mochi-send-button {
-   background: none;
-   border: none;
-   color: #000;
-   width: 26px;
-   height: 26px;
-   min-width: 26px;
-   min-height: 26px;
-   padding: 6px;
-   cursor: pointer;
-   display: flex;
-   align-items: center;
-   justify-content: center;
-   border-radius: 4px;
-   opacity: 0.8;
- }
- 
- #mochi-send-button svg {
-   color: #000000 !important;
-   fill: none !important;
-   stroke: currentColor !important;
- }
- 
- #mochi-send-button:hover svg {
-   color: #333333 !important;
- }
- 
- #mochi-send-button:hover {
-   background: #f5f5f5;
-   opacity: 1;
- }
- 
- /* -----------------------------------------------------------------------------
-  * Loading State
-  * --------------------------------------------------------------------------- */
- #mochi-generating-button {
-   width: 100%;
-   padding: 8px;
-   background: #ffffff;
-   border: 1px solid rgba(0, 0, 0, 0.08);
-   border-radius: 6px;
-   color: #666;
-   font-size: 13px;
-   margin-top: 8px;
-   cursor: wait;
-   font-family: 'Noto Sans', sans-serif;
- }
- 
- .mochi-loading-dots::after {
-   content: '';
-   animation: dots 1.5s steps(5, end) infinite;
- }
- 
- @keyframes dots {
-   0%, 20% { content: ''; }
-   40% { content: '.'; }
-   60% { content: '..'; }
-   80%, 100% { content: '...'; }
+ #mochi-send-button:disabled {
+   cursor: default;
+   opacity: 0.5;
  }
  
  /* -----------------------------------------------------------------------------

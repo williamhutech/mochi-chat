@@ -17,7 +17,7 @@
 /**
  * Global state variables for managing chat interface and functionality
  * @type {Object} chatInterface - Main chat interface DOM element
- * @type {Object} toggleButton - Toggle button DOM element
+ * @type {Object} inputField - Input field DOM element
  * @type {boolean} isInterfaceVisible - Chat interface visibility state
  * @type {Object} extractModule - Text extraction module reference
  * @type {string} lastResponse - Last AI response
@@ -25,9 +25,10 @@
  * @type {Object} chatModule - Chat module reference
  * @type {string} accumulatedResponse - Accumulated response from chat.js
  * @type {boolean} isDynamicWebApp - Flag to indicate if current page is a dynamic web application
+ * @type {boolean} isStreaming - Flag to prevent multiple prompts during streaming
  */
 let chatInterface = null;        
-let toggleButton = null;         
+let inputField = null;         
 let isInterfaceVisible = false;  
 let extractModule = null;        
 let lastResponse = '';          
@@ -35,6 +36,7 @@ let initialized = false;
 let chatModule;                  
 let accumulatedResponse = '';    
 let isDynamicWebApp = false;     
+let isStreaming = false;
 
 /**
  * AI Provider configuration
@@ -139,69 +141,110 @@ async function createChatInterface() {
         </div>
       </div>
       <div id="mochi-output-field"></div>
-      <div id="mochi-input-container">
-        <div id="mochi-prompt-wrapper">
-          <input type="text" id="mochi-prompt-input" placeholder="What would you like to ask?">
-          <button id="mochi-send-button">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
-          </button>
-        </div>
-        <button id="mochi-generating-button" class="mochi-hidden">
-          <span class="mochi-loading-dots">Thinking</span>
-        </button>
-      </div>
     </div>
   `;
   document.body.appendChild(chatInterface);
 
   // Add event listeners
-  document.getElementById('mochi-send-button').addEventListener('click', sendPrompt);
-  document.getElementById('mochi-prompt-input').addEventListener('keypress', function(event) {
-    if (event.key === 'Enter') {
-      sendPrompt();
-    }
-  });
+
   document.getElementById('mochi-close-button').addEventListener('click', hideChatInterface);
   document.getElementById('mochi-expand-button').addEventListener('click', toggleExpand);
 }
 
 /**
- * Initialize chat toggle button
- * Creates and injects the toggle button for the chat interface
- * @throws {Error} If button creation or injection fails
+ * Initialize chat input field
+ * Creates and injects the input field for the chat interface
+ * @throws {Error} If input field creation or injection fails
  * @returns {Promise<void>}
  */
-async function initializeChatToggle() {
+async function initializeChatInput() {
   try {
-    if (!toggleButton) {
-      const button = document.createElement('div');
-      button.id = 'mochi-chat-toggle-button';
-      button.innerHTML = `
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    if (!document.getElementById('mochi-chat-input-container')) {
+      // Create container
+      const container = document.createElement('div');
+      container.id = 'mochi-chat-input-container';
+
+      // Create input field
+      const input = document.createElement('input');
+      input.id = 'mochi-chat-input-field';
+      input.type = 'text';
+      input.placeholder = 'Ask anything...';
+
+      // Create submit button
+      const submitButton = document.createElement('button');
+      submitButton.id = 'mochi-chat-submit-button';
+      submitButton.type = 'button';
+      submitButton.disabled = true;
+      submitButton.innerHTML = `
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 22L16 10M16 10L11 15M16 10L21 15" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
         </svg>
+        <span class="loader"></span>
       `;
       
-      // Add click listener for toggle (of chrome extension)
-      button.addEventListener('click', toggleChatInterface);
+      /**
+       * Updates input state and UI based on current input value
+       * @param {HTMLInputElement} input - The input element
+       * @param {HTMLButtonElement} submitButton - The submit button
+       */
+      const updateInputState = (input, submitButton) => {
+        const hasContent = input.value.trim().length > 0;
+        submitButton.disabled = !hasContent;
+        
+        // Toggle has-content class
+        const container = document.getElementById('mochi-chat-input-container');
+        if (hasContent) {
+          container.classList.add('has-content');
+        } else {
+          container.classList.remove('has-content');
+        }
+      };
       
-      // Add to DOM and make visible
-      document.body.appendChild(button);
-      button.style.display = 'flex';  // Flex display for proper SVG centering
-      toggleButton = button;
-      logToBackground('Chat toggle button created and shown');
+      // Add input event listener to enable/disable submit button and update styles
+      input.addEventListener('input', () => {
+        updateInputState(input, submitButton);
+      });
+
+      // Send prompt when Enter is pressed
+      input.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter' && document.activeElement === input && input.value.trim() && !isStreaming) {
+          e.preventDefault();
+          const prompt = input.value.trim();
+          input.value = '';
+          updateInputState(input, submitButton);
+          await sendPrompt(prompt);
+        }
+      });
+
+      // Send prompt when submit button is clicked
+      submitButton.addEventListener('click', async () => {
+        if (document.activeElement === input && input.value.trim() && !isStreaming) {
+          const prompt = input.value.trim();
+          input.value = '';
+          updateInputState(input, submitButton);
+          await sendPrompt(prompt);
+        }
+      });
+
+      // Add escape listener for leaving the chat input focus
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          input.value = '';
+          input.blur();
+          hideChatInterface();
+        }
+      });
+      
+      // Assemble and add to DOM
+      container.appendChild(input);
+      container.appendChild(submitButton);
+      document.body.appendChild(container);
     }
   } catch (error) {
-    logToBackground(`Error initializing chat toggle: ${error}`, true);
+    logToBackground('[Mochi-Content] Error initializing chat input: ' + error.message, true);
+    throw error;
   }
 }
-
-//=============================================================================
-// UI State Management
-//=============================================================================
 
 /**
  * Toggle chat interface visibility
@@ -209,8 +252,14 @@ async function initializeChatToggle() {
  * @returns {Promise<void>}
  */
 function toggleChatInterface() {
-  logToBackground('Toggling chat interface');
-  if (isInterfaceVisible) {
+  logToBackground('Toggling chat');
+  if (!lastResponse) {
+    // No previous chat, focus the input field
+    const input = document.getElementById('mochi-chat-input-field');
+    if (input) {
+      input.focus();
+    }
+  } else if (isInterfaceVisible) {
     hideChatInterface();
   } else {
     showChatInterface();
@@ -227,14 +276,17 @@ function showChatInterface() {
     // Restore last response if any
     const outputField = document.getElementById('mochi-output-field');
     outputField.innerHTML = lastResponse || '';
-    
+    // Show chat interface
     chatInterface.classList.remove('mochi-hidden');
     requestAnimationFrame(() => {
       chatInterface.classList.add('mochi-visible');
-      // Focus on input field after UI is visible
-      document.getElementById('mochi-prompt-input').focus();
     });
     isInterfaceVisible = true;
+    // Ensure the input field is focused
+    const input = document.getElementById('mochi-chat-input-field');
+    if (input) {
+      input.focus();
+    }
   }
 }
 
@@ -245,15 +297,18 @@ function showChatInterface() {
  */
 function hideChatInterface() {
   if (chatInterface) {
-    // Save the current response before hiding
+    // Save the current response before hiding; will optimise last response in the future
     lastResponse = document.getElementById('mochi-output-field').innerHTML;
     chatInterface.classList.remove('mochi-visible');
     setTimeout(() => {
       chatInterface.classList.add('mochi-hidden');
-      // Remove expanded class when hiding
-      chatInterface.classList.remove('mochi-expanded');
     }, 200);
     isInterfaceVisible = false;
+    // The input field to leave focus
+    const input = document.getElementById('mochi-chat-input-field');
+    if (input) {
+      input.blur();
+    }
   }
 }
 
@@ -274,9 +329,7 @@ function toggleExpand() {
  * @returns {void}
  */
 function resetUIState() {
-  document.getElementById('mochi-prompt-wrapper').classList.remove('mochi-hidden');
-  document.getElementById('mochi-generating-button').classList.add('mochi-hidden');
-  document.getElementById('mochi-prompt-input').focus();
+  document.getElementById('mochi-chat-input-field').focus();
 }
 
 //=============================================================================
@@ -550,20 +603,18 @@ async function captureScreenWithoutInterface() {
  * @param {string} prompt - User input prompt
  * @returns {Promise<void>}
  */
-async function sendPrompt() {
-  const promptInput = document.getElementById('mochi-prompt-input');
-  const promptText = promptInput.value.trim();
-  
-  if (!promptText) return;
-  
+async function sendPrompt(prompt) {
   try {
-    // Update UI to show generating state
-    const promptWrapper = document.getElementById('mochi-prompt-wrapper');
-    const generatingButton = document.getElementById('mochi-generating-button');
-    const outputField = document.getElementById('mochi-output-field');
+    if (isStreaming) return;
     
-    promptWrapper.classList.add('mochi-hidden');
-    generatingButton.classList.remove('mochi-hidden');
+    isStreaming = true;
+    // First show chat interface
+    showChatInterface();
+
+    // Update UI to show generating state
+    const outputField = document.getElementById('mochi-output-field');
+    const submitButton = document.getElementById('mochi-chat-submit-button');
+    submitButton.classList.add('loading');
     
     let screenshot = null;
     
@@ -573,12 +624,16 @@ async function sendPrompt() {
       screenshot = await captureScreenWithoutInterface();
     }
     
-    // Clear input
-    promptInput.value = '';
+    // Clear input and update state
+    const input = document.getElementById('mochi-chat-input-field');
+    input.value = '';
+    const container = document.getElementById('mochi-chat-input-container');
+    container.classList.remove('has-content');
+    submitButton.disabled = true;
     
     // Get chat module and generate response
     const chat = await loadChatModule();
-    await chat.generateChatGPTResponse(promptText, screenshot, {
+    await chat.generateChatGPTResponse(prompt, screenshot, {
       provider: AI_PROVIDERS.OPENAI,
       model: isDynamicWebApp ? AI_MODELS[AI_PROVIDERS.OPENAI].webApp : AI_MODELS[AI_PROVIDERS.OPENAI].default
     });
@@ -586,7 +641,10 @@ async function sendPrompt() {
   } catch (error) {
     logToBackground(`[Mochi-Content] Error sending prompt: ${error}`, true);
     showError('Failed to send prompt');
+    document.getElementById('mochi-chat-submit-button').classList.remove('loading');
     resetUIState();
+  } finally {
+    isStreaming = false;
   }
 }
 
@@ -603,15 +661,16 @@ function handleStreamingUpdate(update) {
   try {    
     // Get UI elements
     const outputField = document.getElementById('mochi-output-field');
-    const promptWrapper = document.getElementById('mochi-prompt-wrapper');
-    const generatingButton = document.getElementById('mochi-generating-button');
+    const submitButton = document.getElementById('mochi-chat-submit-button');
     
-    if (!outputField || !promptWrapper || !generatingButton) {
+    if (!outputField || !submitButton) {
       throw new Error('Required UI elements not found');
     }
 
     // Handle error case
     if (update.error) {
+      submitButton.classList.remove('loading');
+      isStreaming = false;
       showError(update.error);
       resetUIState();
       return;
@@ -635,44 +694,36 @@ function handleStreamingUpdate(update) {
       // Process final text with page links
       const finalText = createPageLinks(outputField.innerHTML);
       outputField.innerHTML = finalText;
+
+      // Save the final response
+      lastResponse = finalText;
       
       // Check if we need to auto-expand
       checkAndExpandContent(outputField);
       
-      // Reset UI state
-      promptWrapper.classList.remove('mochi-hidden');
-      generatingButton.classList.add('mochi-hidden');
+      submitButton.classList.remove('loading');
+      isStreaming = false;
       
       // Reset accumulated response
       logToBackground(accumulatedResponse) //delete later
       accumulatedResponse = '';
       
-      // Focus the input field
-      const inputField = document.getElementById('mochi-prompt-input');
-      if (inputField) {
-        inputField.focus();
-      }
-      
       logToBackground('Processed final update');
     } else if (update.isFinal && !update.text) {
       // Handle final update without text
-      promptWrapper.classList.remove('mochi-hidden');
-      generatingButton.classList.add('mochi-hidden');
+      submitButton.classList.remove('loading');
+      isStreaming = false;
       
       // Reset accumulated response
       accumulatedResponse = '';
-      
-      // Focus the input field
-      const inputField = document.getElementById('mochi-prompt-input');
-      if (inputField) {
-        inputField.focus();
-      }
       
       logToBackground('Processed final update without text');
     }
   } catch (error) {
     logToBackground(`Error handling stream update: ${error}`, true);
     showError('Failed to process response');
+    document.getElementById('mochi-chat-submit-button').classList.remove('loading');
+    isStreaming = false;
     resetUIState();
   }
 }
@@ -768,26 +819,12 @@ function renderMarkdown(text) {
       
       // Convert roots and powers
       .replace(/\\sqrt\{([^{}]+)\}/g, '√($1)')
-      .replace(/\^(\d+|{[^{}]+})/g, '^$1')
-      
-      // Fix decimals and grouping
-      .replace(/([0-9]),([0-9])/g, '$1.$2')
-      .replace(/([0-9])\(/g, '$1×(')
-      .replace(/\)([0-9])/g, ')×$1')
-      
-      // Convert vertical bars
-      .replace(/\\vert/g, '|')
-      .replace(/\\Vert/g, '‖')
-      .replace(/\|\|/g, '‖')
-      
-      // Remove remaining LaTeX commands except text and spacing
-      .replace(/\\([a-zA-Z]+)(?![{a-zA-Z])/g, (match, cmd) => 
-        ['text', 'quad'].includes(cmd) ? match : '')
-      
-      // Clean up spaces
-      .replace(/\s+/g, ' ')
+      .replace(/\^2/g, '²')
+      .replace(/\^3/g, '³')
+      .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)')
+      .replace(/[\\{}$]/g, '')
       .trim();
-    
+
     const id = `MATH_${blockId++}`;
     mathBlocks.push({ id, formula, isDisplay });
     return id;
@@ -1112,7 +1149,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 /**
  * Main initialization function
- * Creates chat interface and toggle button, starts text extraction
+ * Creates chat interface and input field, starts text extraction
  * @returns {Promise<void>}
  */
 async function initializeContent() {
@@ -1124,7 +1161,7 @@ async function initializeContent() {
     
     // Initialize UI components and extract text
     await Promise.all([
-      initializeChatToggle(),
+      initializeChatInput(),
       createChatInterface(),
       hideChatInterface(),
       extractPageText(),
