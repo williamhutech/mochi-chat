@@ -207,7 +207,7 @@
    display: flex;
    justify-content: space-between;
    align-items: center;
-   padding: 14px;
+   padding: 14px 14px 4px 14px;
  }
  
  #mochi-chat-title {
@@ -266,7 +266,7 @@
  #mochi-output-field {
    flex: 1 !important;
    overflow-y: auto !important;
-   background-color: rgba(255, 255, 255, 0.85) !important;
+   background-color: rgba(255, 255, 255) !important;
    margin: 0px !important;
    padding: 0px 20px 20px !important;
    font-size: 12px !important;
@@ -293,33 +293,104 @@
  #mochi-output-field code {
    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace !important;
    font-size: 11px !important;
-   line-height: 20px !important;
+   line-height: 16px !important;
    overflow-x: auto !important;
    white-space: pre-wrap !important;
    word-wrap: break-word !important;
+   margin: 0 !important;
+   padding: 0 !important;
  }
- 
- /* Markdown content styling */
- #mochi-output-field p {
-   margin: 0 0 10px 0 !important;
+
+ /* Add specific padding only to standalone code blocks */
+ #mochi-output-field pre {
+   padding: 14px !important;
+   margin: 8px 0 !important;
+   background-color: rgba(0, 0, 0, 0.04) !important;
+   border-radius: 4px !important;
  }
+
+ /* Reset padding for code within pre blocks to avoid double padding */
+ #mochi-output-field pre > code {
+   padding: 0 !important;
+   margin: 0 !important;
+   background: none !important;
+   font-size: 11px !important;
+   line-height: 16px !important;
+ }
+
+ /* Style for inline code - making all inline code consistent */
+ #mochi-output-field code:not(pre code) {
+   padding: 2px 6px !important;
+   background-color: rgba(0, 0, 0, 0.04) !important;
+   border-radius: 5px !important;
+   border-color: rgba(0, 0, 0, 0.04) !important;
+   font-size: 11px !important;
+   line-height: 16px !important;
+ }
+
+ /* Heading styles */
+ #mochi-output-field h1,
+ #mochi-output-field h2,
+ #mochi-output-field h3,
+ #mochi-output-field h4,
+ #mochi-output-field h5,
+ #mochi-output-field h6 {
+   margin: 8px 0 4px 0 !important;
+ }
+
+ /* -----------------------------------------------------------------------------
+  * List Styling
+  * - Provides consistent spacing and appearance for ordered and unordered lists
+  * - Maintains compact but readable layout with appropriate line height
+  * - Handles nested lists with proper indentation
+  * --------------------------------------------------------------------------- */
  
+ /* Base list container styles */
  #mochi-output-field ul, #mochi-output-field ol {
-   margin: 0 0 10px 0 !important;
+   margin: 4px 0 !important;
    padding-left: 20px !important;
  }
  
+ /* List item spacing and alignment */
  #mochi-output-field ul li, #mochi-output-field ol li {
-   margin-bottom: 4px !important;
-   line-height: 1.5 !important;
+   margin: 8px 0 !important;  /* More space between main items */
+   padding: 0 !important;
+   line-height: 20px !important;
  }
- 
+
+ /* Nested list adjustments for proper hierarchy */
+ #mochi-output-field li > ul,
+ #mochi-output-field li > ol {
+   margin: 0px !important;
+   padding-left: 20px !important;
+ }
+
+ /* Keep nested items more compact */
+ #mochi-output-field li > ul li,
+ #mochi-output-field li > ol li {
+   margin: 0px !important;  /* Less space between nested items */
+ }
+
+ /* List type indicators */
+ #mochi-output-field ol {
+   list-style-type: decimal !important;
+ }
+
  #mochi-output-field ul {
    list-style-type: disc !important;
  }
- 
- #mochi-output-field ol {
-   list-style-type: decimal !important;
+
+ /* Nested list adjustments for proper hierarchy */
+ #mochi-output-field li > ul,
+ #mochi-output-field li > ol {
+   margin: 2px 0 0 0 !important;
+   padding-left: 20px !important;
+ }
+
+ /* Paragraph spacing within list items */
+ #mochi-output-field li p {
+   margin: 0 !important;
+   line-height: 20px !important;
  }
  
  /* -----------------------------------------------------------------------------
@@ -346,97 +417,108 @@
 
 .katex-display {
   margin: 0.5em 0 !important;  /* Reduce vertical spacing between math blocks */
-  overflow-x: auto;
-  overflow-y: hidden;
-  text-align: left;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  text-align: left !important;
 }
 
 .katex-display > .katex {
-  text-align: left;
+  text-align: left !important;
 }
 
 .katex {
-  font-size: 1.1em;
-  line-height: 1.5;
+  font-size: 1.1em !important;
+  line-height: 1.5 !important;
 }
 
 /* Adjust spacing for multi-line equations */
 .katex-display .katex-html {
-  display: block;
-  position: relative;
+  display: block !important;
+  position: relative !important;
 }
 
 .katex-display .base {
-  margin: 0.25em 0;
+  margin: 0.25em 0 !important;
 }
 
  /* Code formatting in math context */
 code {
-  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-  background-color: rgba(175, 184, 193, 0.2);
-  padding: 0.2em 0.4em;
-  border-radius: 4px;
-  font-size: 0.95em;
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace !important;
+  background-color: rgba(175, 184, 193, 0.2) !important;
+  padding: 0.2em 0.4em !important;
+  border-radius: 4px !important;
+  font-size: 0.95em !important;
 }
 
  /* -----------------------------------------------------------------------------
   * Table Styles
   * --------------------------------------------------------------------------- */
  .table-wrapper {
-   overflow-x: auto;
-   margin: 0.5em 0;
+   overflow-x: auto !important;
+   margin: 0.5em 0 !important;
  }
 
  .mochi-table {
-   border-collapse: collapse;
-   width: 100%;
-   font-size: 0.9em;  /* Decreased font size */
-   line-height: 1.4;
+   border-collapse: collapse !important;
+   width: 100% !important;
+   font-size: 0.9em !important;  /* Decreased font size */
+   line-height: 1.4 !important;
  }
 
  .mochi-table th,
  .mochi-table td {
-   padding: 0.4em 0.6em;
-   border: 1px solid #ddd;
-   text-align: left;
+   padding: 0.4em 0.6em !important;
+   border: 1px solid #ddd !important;
+   text-align: left !important;
  }
 
  .mochi-table th {
-   background-color: #f5f5f5;
-   font-weight: 600;
+   background-color: #f5f5f5 !important;
+   font-weight: 600 !important;
  }
 
  .mochi-table tr:nth-child(even) {
-   background-color: #fafafa;
+   background-color: #fafafa !important;
  }
 
  .mochi-table tr:hover {
-   background-color: #f0f0f0;
+   background-color: #f0f0f0 !important;
  }
 
  
  #mochi-send-button:disabled {
-   cursor: default;
-   opacity: 0.5;
+   cursor: default !important;
+   opacity: 0.5 !important;
  }
  
  /* -----------------------------------------------------------------------------
   * Page Links
   * --------------------------------------------------------------------------- */
  .mochi-page-link {
-   color: black;
-   text-decoration: underline;
-   cursor: pointer;
+   color: black !important;
+   text-decoration: underline !important;
+   cursor: pointer !important;
  }
  
  .mochi-page-link:hover {
-   color: #0D47A1;
+   color: #0D47A1 !important;
  }
  
  /* -----------------------------------------------------------------------------
   * Error States
   * --------------------------------------------------------------------------- */
  .mochi-error {
-   color: red;
+   color: red !important;
  }
- 
+
+ /* -----------------------------------------------------------------------------
+  * Hyperlinks
+  * --------------------------------------------------------------------------- */
+ #mochi-output-field a {
+   text-decoration: underline !important;
+ }
+
+ #mochi-output-field a:hover {
+   opacity: 0.6 !important;
+   text-decoration: underline !important;
+ }
