@@ -1,0 +1,19 @@
+{
+  "name": "mochi-chat-api",
+  "version": "1.0.0",
+  "description": "Mochi Chat API - Serverless backend for Mochi Chat Extension",
+  "main": "index.js",
+  "scripts": {
+    "start": "node api/chat.js",
+    "dev": "node api/chat.js",
+    "deploy": "vercel deploy --prod"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.1.3",
+    "@vercel/node": "^3.0.14",
+    "openai": "^4.24.1"
+  },
+  "devDependencies": {
+    "vercel": "^33.1.0"
+  }
+}
