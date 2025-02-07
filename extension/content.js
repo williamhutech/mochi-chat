@@ -177,7 +177,7 @@ async function initializeChatInput() {
       submitButton.disabled = true;
       submitButton.innerHTML = `
         <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M16 22L16 10M16 10L11 15M16 10L21 15" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M10 16L22 16M22 16L17 11M22 16L17 21" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
         </svg>
         <span class="loader"></span>
       `;

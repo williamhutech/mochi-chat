@@ -19,44 +19,46 @@
   * Chat Input Container (replaces toggle button)
   * --------------------------------------------------------------------------- */
  #mochi-chat-input-container {
-   position: fixed;
-   bottom: 20px;
-   left: 20px;
-   width: 180px; /* Initial smaller width */
-   box-sizing: border-box;
-   padding: 8px;
-   background-color: rgba(241, 241, 241, 0.68);
-   backdrop-filter: blur(24px);
-   border-radius: 24px;
-   display: flex;
-   align-items: center;
-   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
-   z-index: 2147483647;
-   transform: scale(1);
-   transition: transform 0.2s ease-out, width 0.2s ease-out;
+   position: fixed !important;
+   bottom: 20px !important;
+   left: 20px !important;
+   width: 180px !important; /* Initial smaller width */
+   height: 48px !important;
+   box-sizing: border-box !important;
+   padding: 8px !important;
+   background-color: rgba(241, 241, 241, 0.68) !important;
+   backdrop-filter: blur(24px) !important;
+   border-radius: 24px !important;
+   display: flex !important;
+   align-items: center !important;
+   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04) !important;
+   z-index: 2147483647 !important;
+   transform: scale(1) !important;
+   transition: transform 0.2s ease-out, width 0.2s ease-out !important;
  }
 
  #mochi-chat-input-container:hover {
-   transform: scale(1.01);
-   transition: transform 0.2s ease-in;
+   transform: scale(1.01) !important;
+   transition: transform 0.2s ease-in !important;
  }
 
  #mochi-chat-input-container:focus-within {
-   width: 300px;
-   transition: width 0.2s ease-out;
+   width: 300px !important;
+   transition: width 0.2s ease-out !important;
  }
 
  #mochi-chat-input-container #mochi-chat-input-field {
    flex: 1 !important;
    height: 32px !important;
+   display: flex !important;
+   align-items: center !important;
    background: transparent !important;
    border: none !important;
    margin-left: 13px !important;
    margin-right: 10px !important;
    padding: 0 !important;
-   font-family: 'Noto Sans', sans-serif !important;
+   font-family: 'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
    font-size: 13px !important;
-   line-height: 20px !important;
    font-weight: 400 !important;
    color: rgba(0, 0, 0, 0.6) !important;
    width: calc(100% - 44px) !important;
