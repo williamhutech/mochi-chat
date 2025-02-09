@@ -4,11 +4,29 @@
  * This module serves as the main API endpoint for the Mochi Chat extension.
  * It handles incoming chat requests and manages responses from multiple AI providers.
  * 
- * Key Features:
- * - Multiple AI provider support (Gemini, OpenAI)
- * - Real-time response streaming
- * - Error handling and recovery
- * - CORS and HTTP method handling
+ * Architectural Responsibilities:
+ * 1. API Routing
+ *    - Handle incoming HTTP requests
+ *    - Route requests to appropriate providers
+ *    - Manage CORS and HTTP headers
+ * 
+ * 2. Request Validation
+ *    - Validate required parameters
+ *    - Check provider and model availability
+ *    - Sanitize inputs
+ * 
+ * 3. Response Streaming
+ *    - Stream AI responses in real-time
+ *    - Manage server-sent events
+ *    - Handle connection lifecycle
+ * 
+ * 4. Error Handling
+ *    - Catch and process errors
+ *    - Format error responses
+ *    - Provide detailed logs
+ * 
+ * Note: This module focuses on server-side functionality.
+ * UI updates and local storage are handled by the extension.
  * 
  * @module chat
  */
@@ -38,11 +56,24 @@ const AI_PROVIDERS = {
 
 /**
  * Default AI Models for each provider
+ * Matches models used in the extension
  * @constant {Object}
  */
 const AI_MODELS = {
-  [AI_PROVIDERS.OPENAI]: 'gpt-4',
-  [AI_PROVIDERS.GEMINI]: 'gemini-pro'
+  [AI_PROVIDERS.OPENAI]: 'gpt-4o',
+  [AI_PROVIDERS.GEMINI]: 'gemini-2.0-flash'
+};
+
+/**
+ * Error messages for different scenarios
+ * @constant {Object}
+ */
+const ERROR_MESSAGES = {
+  MISSING_PROMPT: 'Prompt is required',
+  INVALID_PROVIDER: 'Invalid provider',
+  INVALID_MODEL: 'Invalid provider or model not found',
+  STREAM_ERROR: 'Error streaming response',
+  PROVIDER_ERROR: 'Provider error',
 };
 
 /**
@@ -54,10 +85,12 @@ const AI_MODELS = {
  * @param {string} req.body.prompt - User input prompt
  * @param {string} [req.body.provider] - AI provider to use (default: 'openai')
  * @param {string} [req.body.model] - Model to use for the selected provider
+ * @param {string} [req.body.screenshot] - Optional base64 image data
+ * @param {Array<object>} [req.body.history] - Optional conversation history
  * @param {object} res - HTTP response object
  * @returns {Promise<void>} Resolves when response is complete
  */
-module.exports = async function handler(req, res) {
+module.exports = async (req, res) => {
   // Set CORS headers for all responses
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -87,25 +120,42 @@ module.exports = async function handler(req, res) {
     });
 
     // Extract and validate request parameters
-    const { prompt, provider = AI_PROVIDERS.OPENAI, model } = req.body;
+    const { 
+      prompt, 
+      provider = AI_PROVIDERS.OPENAI, 
+      model,
+      screenshot,
+      history = []
+    } = req.body;
 
     console.log('[Mochi-API] Processing request:', {
       provider,
       model: model || AI_MODELS[provider],
-      promptLength: prompt?.length
+      promptLength: prompt?.length,
+      hasScreenshot: !!screenshot,
+      historyLength: history.length
     });
 
     // Validate required fields
     if (!prompt) {
       console.log('[Mochi-API] Missing prompt in request');
-      res.status(400).json({ error: 'Prompt is required' });
+      res.status(400).json({ error: ERROR_MESSAGES.MISSING_PROMPT });
+      return;
+    }
+
+    // Validate provider
+    if (!Object.values(AI_PROVIDERS).includes(provider)) {
+      console.log('[Mochi-API] Invalid provider:', provider);
+      res.status(400).json({ error: ERROR_MESSAGES.INVALID_PROVIDER });
       return;
     }
 
     // Use default model if not specified
     const selectedModel = model || AI_MODELS[provider];
     if (!selectedModel) {
-      throw new Error('Invalid provider or model not found');
+      console.log('[Mochi-API] Invalid model for provider:', provider);
+      res.status(400).json({ error: ERROR_MESSAGES.INVALID_MODEL });
+      return;
     }
 
     // Set up streaming response
@@ -115,26 +165,38 @@ module.exports = async function handler(req, res) {
 
     // Initialize appropriate handler and stream response
     let handler;
+    let response;
+    
     if (provider === AI_PROVIDERS.OPENAI) {
       handler = new OpenAIHandler();
     } else if (provider === AI_PROVIDERS.GEMINI) {
       handler = new GeminiHandler();
     } else {
-      throw new Error('Invalid provider');
+      throw new Error(ERROR_MESSAGES.INVALID_PROVIDER);
     }
 
-    await handler.streamResponse(prompt, selectedModel, res);
+    // Stream response with all options
+    response = await handler.streamResponse(prompt, selectedModel, res, {
+      screenshot,
+      history
+    });
+
     res.end();
   } catch (error) {
     console.error('[Mochi-API] Chat API Error:', error);
     
     // If headers haven't been sent yet, send error response
     if (!res.headersSent) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ 
+        error: error.message || ERROR_MESSAGES.STREAM_ERROR,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
     } else {
       // If streaming has started, send error in stream format
-      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      res.write(`data: ${JSON.stringify({ 
+        error: error.message || ERROR_MESSAGES.STREAM_ERROR
+      })}\n\n`);
       res.end();
     }
   }
-}
+};

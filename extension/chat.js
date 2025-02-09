@@ -5,11 +5,28 @@
  * It manages communication with AI models (Gemini and OpenAI) and handles
  * real-time response processing and delivery.
  * 
- * Key Features:
- * - Multiple AI provider support (Gemini, OpenAI)
- * - Real-time response streaming
- * - Error handling and recovery
- * - Message processing and formatting
+ * Architectural Responsibilities:
+ * 1. User Interaction
+ *    - Handle user input and commands
+ *    - Process user preferences and settings
+ * 
+ * 2. UI Updates
+ *    - Update chat interface in real-time
+ *    - Display streaming responses
+ *    - Show loading states and errors
+ * 
+ * 3. Local Storage
+ *    - Manage conversation history
+ *    - Store user preferences
+ *    - Cache responses when needed
+ * 
+ * 4. Message Passing
+ *    - Communication between content/background scripts
+ *    - Event handling for UI updates
+ *    - Chrome extension messaging
+ * 
+ * Note: This module focuses on client-side functionality.
+ * API calls and provider-specific logic are handled by the backend.
  * 
  * @module chat
  */

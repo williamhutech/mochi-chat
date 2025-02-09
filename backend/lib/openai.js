@@ -5,18 +5,14 @@
  * It manages real-time response processing and delivery through server-sent events.
  * 
  * Key Features:
- * - OpenAI API integration
+ * - OpenAI API integration with GPT-4o and GPT-4o-mini
  * - Real-time response streaming
- * - Error handling and recovery
- * - Message processing and formatting
+ * - Support for text and image inputs
+ * - Message history processing
  */
 
 const OpenAI = require('openai');
 
-/**
- * OpenAI handler class for managing API interactions
- * Provides methods for streaming responses and processing chunks
- */
 class OpenAIHandler {
   /**
    * Initialize OpenAI client with API key
@@ -44,31 +40,70 @@ class OpenAIHandler {
    * 4. Send updates through server-sent events
    * 
    * @param {string} prompt - User input prompt to send to OpenAI
-   * @param {string} model - OpenAI model to use (e.g., 'gpt-4', 'gpt-3.5-turbo')
+   * @param {string} model - OpenAI model to use (e.g., 'gpt-4o', 'gpt-4o-mini')
    * @param {object} res - HTTP response object for streaming
+   * @param {object} [options] - Additional options
+   * @param {string} [options.screenshot] - Base64 image data for vision models
+   * @param {Array<object>} [options.history] - Previous conversation history
    * @returns {Promise<void>} Resolves when streaming is complete
    * @throws {Error} If streaming or API call fails
    */
-  async streamResponse(prompt, model, res) {
+  async streamResponse(prompt, model, res, options = {}) {
     console.log('[Mochi-API] Starting OpenAI stream with model:', model);
     
     try {
-      const messages = [{ role: 'user', content: prompt }];
+      // Prepare messages array with history if provided
+      const messages = options.history ? [...options.history] : [];
+      
+      // Add current prompt with screenshot if available
+      if (options.screenshot) {
+        messages.push({
+          role: 'user',
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: options.screenshot } }
+          ]
+        });
+      } else {
+        messages.push({ role: 'user', content: prompt });
+      }
+
+      // Create stream
       const stream = await this.client.chat.completions.create({
         model: model,
         messages: messages,
         stream: true,
       });
 
+      // Process stream chunks
+      let accumulatedResponse = '';
+      let currentChunk = '';
+      
       for await (const chunk of stream) {
         const content = this.processStreamChunk(chunk);
         if (content) {
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          currentChunk += content;
+          
+          // Process chunk when it reaches optimal size or contains sentence ending
+          if (currentChunk.length >= 4 || /[.!?]\s*$/.test(currentChunk)) {
+            await this.streamTextChunk(currentChunk, res);
+            accumulatedResponse += currentChunk;
+            currentChunk = '';
+          }
         }
+      }
+      
+      // Send any remaining text
+      if (currentChunk) {
+        await this.streamTextChunk(currentChunk, res);
+        accumulatedResponse += currentChunk;
       }
 
       console.log('[Mochi-API] OpenAI stream completed successfully');
       res.write('data: [DONE]\n\n');
+      
+      // Return accumulated response for history
+      return accumulatedResponse;
     } catch (error) {
       console.error('[Mochi-API] OpenAI Stream Error:', error);
       throw error;
@@ -92,6 +127,21 @@ class OpenAIHandler {
       console.error('[Mochi-API] OpenAI Chunk Processing Error:', error);
       return '';
     }
+  }
+
+  /**
+   * Stream a chunk of text to the client
+   * Handles the actual sending of text through server-sent events
+   * 
+   * @param {string} text - Text chunk to stream
+   * @param {object} res - HTTP response object
+   * @returns {Promise<void>}
+   */
+  async streamTextChunk(text, res) {
+    return new Promise((resolve) => {
+      res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+      resolve();
+    });
   }
 }
 
