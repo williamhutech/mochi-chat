@@ -1,0 +1,184 @@
+%% Mochi Chat Sequence Diagram Guide
+%% Based on Mermaid.js
+%% Syntax: https://mermaid.js.org/syntax/sequenceDiagram.html
+
+%% 1. Naming Conventions:
+%%    - Use descriptive names for participants
+%%    - Include file names in participant aliases using <br/>
+%%    - Keep messages concise but descriptive
+%%    - Use consistent terminology across the diagram
+%%
+%% 2. Message Types:
+%%    - Request: ->> (solid arrow)
+%%    - Response: -->> (dashed arrow)
+%%    - Error Response: -->> (use same as response)
+%%
+%% 3. Parallel Operations (par):
+%%    - Use for concurrent operations
+%%    - Each parallel block should be self-contained
+%%    - End with 'and' for additional parallel blocks
+%%
+%% 4. Critical Sections (critical):
+%%    - Use for important operations that require error handling
+%%    - Include 'option' blocks for error cases
+%%    - Keep critical sections focused on core functionality
+%%
+%% 5. Grouping (rect):
+%%    - Group related operations using rect
+%%    - Use rgb(240, 240, 240) for consistent styling
+%%    - Label groups with clear section names
+%%
+%% 6. Activation Bars:
+%%    - Use activate/deactivate to show component lifetime
+%%    - Show nested activations for call hierarchy
+%%    - Ensure proper deactivation order
+%%
+%% 7. Parameters:
+%%    - Show full parameters in notes for important calls
+%%    - Mark optional parameters with ?
+%%    - Group related parameters together
+%%
+%% 8. Best Practices:
+%%    - Keep the diagram flowing top to bottom
+%%    - Group related interactions together
+%%    - Include error handling for critical operations
+%%    - Show both success and failure paths
+%%    - Document complex interactions with parameters
+%%
+
+sequenceDiagram
+    participant User
+    participant Chrome
+    participant Content as Content Script<br/>(content.js)
+    participant Background as Background Script<br/>(background.js)
+    participant Chat as Chat Module<br/>(chat.js)
+    participant Conv as Conversation Manager<br/>(conversation.js)
+    participant API as Backend API<br/>(api/chat.js)
+    participant OpenAI as OpenAI Handler<br/>(lib/openai.js)
+    participant Gemini as Gemini Handler<br/>(lib/gemini.js)
+
+    %% Initialization
+    rect rgb(240, 240, 240)
+        Note over User,Gemini: Initialization
+        User->>Chrome: Open webpage
+        Chrome->>Content: Tab updated event
+        activate Content
+        Content->>Background: Log initialization
+        Background-->>Content: Logged
+
+        par Initialize Components
+            Content->>Content: initializeChatInput()
+            Content->>Content: createChatInterface()
+            Content->>Content: hideChatInterface()
+        and Process Page
+            Content->>Content: extractPageText()
+            Content->>Content: checkIfDynamicWebApp()
+        end
+
+        Content->>Chat: loadChatModule()
+        activate Chat
+        Chat->>Conv: import
+        activate Conv
+        Conv-->>Chat: conversation module
+        Chat-->>Content: chat module loaded
+        deactivate Content
+    end
+
+    %% Chat Interaction
+    rect rgb(240, 240, 240)
+        Note over User,Gemini: Chat Interaction
+        User->>Content: Toggle chat interface
+        activate Content
+        Content->>Content: toggleChatInterface()
+        Content->>Content: showChatInterface()
+        Content-->>User: interface visible
+        deactivate Content
+
+        User->>Content: Enter prompt
+        activate Content
+        Content->>Content: showChatInterface()
+        Content->>Chat: sendPrompt(prompt)
+        activate Chat
+        
+        par Get History and Screenshot
+            Chat->>Conv: getHistory()
+            Conv-->>Chat: conversation history
+        and
+            alt isDynamicWebApp is true
+                Content->>Content: captureScreenWithoutInterface()
+                Content->>Content: enhanceScreenshot()
+                Content-->>Chat: screenshot data
+            end
+        end
+
+        Chat->>Chat: generateChatGPTResponse(prompt, screenshot?, config)
+        Note over Chat: config: {<br/>provider: "openai" | "gemini",<br/>model: string<br/>}
+
+        critical Process Request
+            Chat->>API: POST /api/chat
+            activate API
+            Note over Chat,API: {<br/>prompt: string,<br/>provider: "openai" | "gemini",<br/>model: string,<br/>screenshot?: string,<br/>history?: Array<Message><br/>}
+
+            alt OpenAI Provider
+                API->>OpenAI: new OpenAIHandler()
+                activate OpenAI
+                API->>OpenAI: streamResponse(prompt, model, res, options)
+                OpenAI->>OpenAI: processStreamChunk()
+                OpenAI->>OpenAI: streamTextChunk()
+                OpenAI-->>API: SSE chunks
+                deactivate OpenAI
+            else Gemini Provider
+                API->>Gemini: new GeminiHandler()
+                activate Gemini
+                API->>Gemini: streamResponse(prompt, model, res, options)
+                Gemini->>Gemini: processStream()
+                Gemini->>Gemini: processGeminiChunk()
+                Gemini->>Gemini: streamTextChunk()
+                Gemini-->>API: SSE chunks
+                deactivate Gemini
+            end
+
+            API-->>Chat: SSE response chunks
+            deactivate API
+        option Network Error
+            API-->>Chat: Connection failed
+            Chat->>Background: Log error
+            Background-->>Chat: Logged
+        end
+
+        Chat->>Content: handleStreamingUpdate(chunk)
+        activate Content
+        par UI Updates
+            Content->>Content: renderMarkdown()
+            Content->>Content: createPageLinks()
+            Content->>Content: checkAndExpandContent()
+        and
+            Chat->>Conv: addToHistory(messages)
+            Conv-->>Chat: history updated
+        end
+        Content-->>User: UI updated
+        deactivate Content
+        deactivate Chat
+
+        User->>Content: View response
+    end
+
+    %% Error Handling
+    rect rgb(240, 240, 240)
+        Note over User,Gemini: Error Handling
+        User->>Content: Invalid request
+        activate Content
+        Content->>Chat: sendPrompt(invalid)
+        activate Chat
+        Chat->>API: POST /api/chat
+        activate API
+        API-->>Chat: Error response
+        Chat->>Background: Log error
+        Background-->>Chat: Logged
+        Chat->>Content: handleStreamingUpdate(error)
+        Content->>Content: showError()
+        Content->>Content: resetUIState()
+        deactivate Content
+        deactivate Chat
+        deactivate API
+    end

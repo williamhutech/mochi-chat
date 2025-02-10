@@ -73,6 +73,12 @@ const AI_MODELS = {
   [AI_PROVIDERS.GEMINI]: 'gemini-2.0-flash-exp'
 };
 
+/**
+ * API Configuration
+ * Production endpoint for Mochi Chat API
+ */
+const API_ENDPOINT = 'https://mochi-chat-gb30ssit2-maniifold.vercel.app/api/chat';
+
 //=============================================================================
 // State Management
 //=============================================================================
@@ -172,7 +178,7 @@ export async function generateChatGPTResponse(prompt, screenshot, config) {
       await streamGeminiResponse(messages);
     }
     
-    // Add to history with proper message format
+    // Add the prompt to history
     if (screenshot) {
       await addToHistory({
         role: 'user',
@@ -249,16 +255,15 @@ function processStreamChunk(chunk) {
  */
 async function streamOpenAIResponse(messages, model) {
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(API_ENDPOINT, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEYS[AI_PROVIDERS.OPENAI]}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: model,
         messages,
-        stream: true
+        provider: AI_PROVIDERS.OPENAI,
+        model
       })
     });
 
@@ -279,34 +284,33 @@ async function streamOpenAIResponse(messages, model) {
       
       buffer += decoder.decode(value, { stream: true });
       
-      const newlineIndex = buffer.lastIndexOf('\n');
-      if (newlineIndex !== -1) {
-        const completeChunks = buffer.slice(0, newlineIndex);
-        buffer = buffer.slice(newlineIndex + 1);
-        
-        const processedText = processStreamChunk(completeChunks);
-        if (processedText) {
-          accumulatedResponse += processedText;
-          
-          logToBackground(`Sending processed chunk to content: ${processedText}`);
-          sendToContent({
-            action: 'updateStreamingResponse',
-            text: processedText,
-            isFinal: false
-          });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') {
+            continue;
+          }
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.error) {
+              throw new Error(parsed.error);
+            } else if (parsed.content) {
+              accumulatedResponse += parsed.content;
+              logToBackground(`Sending processed chunk to content: ${parsed.content}`);
+              sendToContent({
+                action: 'updateStreamingResponse',
+                text: parsed.content,
+                isFinal: false
+              });
+            }
+          } catch (e) {
+            // Ignore parse errors for incomplete chunks
+            logToBackground(`Parse error: ${e.message}`);
+          }
         }
-      }
-    }
-    
-    if (buffer.trim()) {
-      const processedText = processStreamChunk(buffer.trim());
-      if (processedText) {
-        accumulatedResponse += processedText;
-        sendToContent({
-          action: 'updateStreamingResponse',
-          text: processedText,
-          isFinal: false
-        });
       }
     }
     
@@ -340,87 +344,61 @@ async function streamOpenAIResponse(messages, model) {
  */
 async function streamGeminiResponse(messages) {
   try {
-    logToBackground('Initializing Gemini stream');
-    
-    // Format the conversation history for Gemini
-    const formattedMessages = messages.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }]
-    }));
-
-    // Combine all messages into a single context string
-    let contextString = formattedMessages.map(msg => 
-      `${msg.role === 'user' ? 'Human' : 'Assistant'}: ${msg.parts[0].text}`
-    ).join('\n\n');
-    
-    // Add the final instruction
-    contextString += '\n\nHuman: ' + messages[messages.length - 1].content + '\n\nAssistant: ';
-    
-    logToBackground('Sending request with context');
-    
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent', {
+    const response = await fetch(API_ENDPOINT, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': API_KEYS[AI_PROVIDERS.GEMINI]
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: contextString
-          }]
-        }]
+        messages,
+        provider: AI_PROVIDERS.GEMINI,
+        model: 'gemini-pro'
       })
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`Gemini API error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let isInJson = false;
-    let jsonDepth = 0;
-
+    
     while (true) {
-      const { value, done } = await reader.read();
+      const { done, value } = await reader.read();
       
       if (done) {
         break;
       }
       
-      const chunk = decoder.decode(value, { stream: true });
-      logToBackground(`Raw Gemini chunk: ${chunk}`);
+      buffer += decoder.decode(value, { stream: true });
       
-      // Process the chunk character by character to properly handle JSON boundaries
-      for (let char of chunk) {
-        if (char === '{') {
-          if (!isInJson) {
-            isInJson = true;
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') {
+            continue;
           }
-          jsonDepth++;
-          buffer += char;
-        } else if (char === '}') {
-          jsonDepth--;
-          buffer += char;
-          if (jsonDepth === 0 && isInJson) {
-            try {
-              const parsed = JSON.parse(buffer);
-              if (parsed.candidates?.[0]?.content?.parts?.[0]?.text) {
-                const text = parsed.candidates[0].content.parts[0].text;
-                // Process text with optimized chunk handling
-                await streamTextInChunks(text);
-              }
-            } catch (e) {
-              logToBackground(`Error parsing complete JSON: ${e.message}`, true);
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.error) {
+              throw new Error(parsed.error);
+            } else if (parsed.content) {
+              accumulatedResponse += parsed.content;
+              logToBackground(`Sending processed chunk to content: ${parsed.content}`);
+              sendToContent({
+                action: 'updateStreamingResponse',
+                text: parsed.content,
+                isFinal: false
+              });
             }
-            buffer = '';
-            isInJson = false;
+          } catch (e) {
+            // Ignore parse errors for incomplete chunks
+            logToBackground(`Parse error: ${e.message}`);
           }
-        } else if (isInJson) {
-          buffer += char;
         }
       }
     }

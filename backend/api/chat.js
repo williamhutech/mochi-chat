@@ -50,8 +50,8 @@ export const config = {
  * @constant {Object}
  */
 const AI_PROVIDERS = {
-  GEMINI: 'gemini',
-  OPENAI: 'openai'
+  OPENAI: 'openai',
+  GEMINI: 'gemini'
 };
 
 /**
@@ -77,16 +77,56 @@ const ERROR_MESSAGES = {
 };
 
 /**
+ * Extract text and image content from message
+ * @param {Object} message - Message object from extension
+ * @returns {Object} Extracted content and screenshot
+ */
+function extractContent(message) {
+  if (!Array.isArray(message.content)) {
+    return { text: message.content, screenshot: null };
+  }
+
+  const textPart = message.content.find(part => part.type === 'text');
+  const imagePart = message.content.find(part => part.type === 'image_url');
+
+  return {
+    text: textPart?.text || '',
+    screenshot: imagePart?.image_url?.url || null
+  };
+}
+
+/**
+ * Process messages array to extract latest prompt and screenshot
+ * @param {Array} messages - Array of message objects
+ * @returns {Object} Latest prompt and screenshot
+ */
+function processMessages(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    throw new Error('Invalid messages format');
+  }
+
+  // Get the last user message
+  const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
+  if (!lastUserMessage) {
+    throw new Error('No user message found');
+  }
+
+  return extractContent(lastUserMessage);
+}
+
+//=============================================================================
+// Request Handler
+//=============================================================================
+
+/**
  * Chat API request handler
  * Processes incoming requests and manages AI provider responses
  * 
  * @param {object} req - HTTP request object
- * @param {object} req.body - Request body containing prompt and configuration
- * @param {string} req.body.prompt - User input prompt
+ * @param {object} req.body - Request body containing messages and configuration
+ * @param {Array<object>} req.body.messages - Array of message objects
  * @param {string} [req.body.provider] - AI provider to use (default: 'openai')
  * @param {string} [req.body.model] - Model to use for the selected provider
- * @param {string} [req.body.screenshot] - Optional base64 image data
- * @param {Array<object>} [req.body.history] - Optional conversation history
  * @param {object} res - HTTP response object
  * @returns {Promise<void>} Resolves when response is complete
  */
@@ -120,20 +160,17 @@ module.exports = async (req, res) => {
     });
 
     // Extract and validate request parameters
-    const { 
-      prompt, 
-      provider = AI_PROVIDERS.OPENAI, 
-      model,
-      screenshot,
-      history = []
-    } = req.body;
+    const { messages, provider = AI_PROVIDERS.OPENAI, model } = req.body;
+
+    // Extract prompt and screenshot from messages
+    const { text: prompt, screenshot } = processMessages(messages);
 
     console.log('[Mochi-API] Processing request:', {
       provider,
       model: model || AI_MODELS[provider],
       promptLength: prompt?.length,
       hasScreenshot: !!screenshot,
-      historyLength: history.length
+      historyLength: messages.length - 1
     });
 
     // Validate required fields
@@ -174,6 +211,9 @@ module.exports = async (req, res) => {
     } else {
       throw new Error(ERROR_MESSAGES.INVALID_PROVIDER);
     }
+
+    // Create history array without the latest prompt
+    const history = messages.slice(0, -1);
 
     // Stream response with all options
     response = await handler.streamResponse(prompt, selectedModel, res, {
