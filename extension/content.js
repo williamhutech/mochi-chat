@@ -56,7 +56,7 @@ const AI_MODELS = {
     default: 'gpt-4o-mini',
     webApp: 'gpt-4o'
   },
-  [AI_PROVIDERS.GEMINI]: 'gemini-2.0-flash-exp'
+  [AI_PROVIDERS.GEMINI]: 'gemini-2.0-flash'
 };
 
 let currentProvider = AI_PROVIDERS.OPENAI;
@@ -733,231 +733,162 @@ function handleStreamingUpdate(update) {
 //=============================================================================
 
 /**
- * Function to render markdown text with specific options
- * Supports LaTeX math expressions using KaTeX and markdown tables
- * @param {string} text - Text to render as markdown
- * @returns {string} HTML string of rendered markdown
+ * Initialize KaTeX auto-render with global configuration
+ */
+function initializeKaTeX() {
+  logToBackground('[Mochi-Content] Initializing KaTeX auto-render');
+  
+  if (typeof katex === 'undefined') {
+    logToBackground('[Mochi-Content] Warning: KaTeX not available', true);
+    return;
+  }
+  
+  window.katexOptions = {
+    delimiters: [
+      {left: '$$', right: '$$', display: true},
+      {left: '$', right: '$', display: false},
+      {left: '\\[', right: '\\]', display: true},
+      {left: '\\(', right: '\\)', display: false}
+    ],
+    throwOnError: false,
+    errorCallback: function(msg) {
+      logToBackground(`[Mochi-Content] LaTeX error: ${msg}`, true);
+    },
+    trust: true,
+    strict: false,
+    maxSize: 1000,
+    maxExpand: 1000,
+    fleqn: false,
+    leqno: false
+  };
+  
+  logToBackground('[Mochi-Content] KaTeX auto-render initialized');
+}
+
+/**
+ * Renders markdown text with LaTeX math expressions using KaTeX
+ * @param {string} text - Raw markdown text that may contain LaTeX expressions
+ * @returns {string} HTML string with rendered markdown and LaTeX
+ * 
+ * IMPORTANT: LaTeX Rendering Implementation Notes
+ * --------------------------------------------
+ * 1. Block Preservation Strategy:
+ *    - Extract LaTeX blocks BEFORE markdown processing
+ *    - Use placeholders to protect LaTeX from markdown
+ *    - Restore blocks AFTER markdown, BEFORE KaTeX
+ * 
+ * 2. LaTeX Block Detection:
+ *    - Comprehensive regex catches ALL math formats:
+ *      $$...$$     (display math)
+ *      $...$       (inline math)
+ *      \[...\]     (display math)
+ *      \(...\)     (inline math)
+ *      \begin{align*}...\end{align*}
+ *    - Convert \(...\) to $...$ for better inline math support
+ *    - Remove newlines between consecutive \]...\[ blocks
+ * 
+ * 3. Critical Preprocessing:
+ *    - Add spacing in \text{...} commands
+ *    - Fix sqrt and fraction formatting
+ *    - Handle operator spacing
+ *    - Escape special chars in text mode
+ *    - Remove extra newlines within math blocks
+ *    - Convert inline delimiters for consistency
+ * 
+ * 4. Common Pitfalls:
+ *    - Don't convert between display math styles
+ *    - Don't use \mathbin for operators
+ *    - Don't over-escape backslashes
+ *    - Don't let markdown process LaTeX
+ *    - Watch for newlines between consecutive math blocks
+ * 
+ * 5. Error Handling:
+ *    - Always have fallback rendering
+ *    - Log blocks for debugging
+ *    - Return markdown-only on KaTeX fails
+ * 
+ * 6. Key Improvements:
+ *    - Handles mixed delimiter styles ($$ vs \[ vs \begin{align*})
+ *    - Preserves spacing in text mode
+ *    - Maintains tight spacing between consecutive equations
+ *    - Converts problematic delimiters to more compatible ones
+ *    - Properly escapes special characters in text mode
  */
 function renderMarkdown(text) {
   logToBackground('[Mochi-Content] Starting markdown rendering');
   
-  // First, protect LaTeX blocks from markdown processing
-  const mathBlocks = [];
-  let blockId = 0;
-
-  // Helper function to add math block
-  const addMathBlock = (formula, isDisplay) => {
-    logToBackground(`[Mochi-Content] Processing math block ${blockId}: ${formula.substring(0, 50)}${formula.length > 50 ? '...' : ''}`);
+  try {
+    // Store LaTeX blocks temporarily
+    const blocks = [];
+    const placeholder = '###LATEX_BLOCK_###';
     
-    // Combine consecutive display math blocks
-    if (isDisplay) {
-      // First remove any existing \quad or \, spacing
-      formula = formula.replace(/\\quad\s*/g, ' ').replace(/\\,\s*/g, ' ');
+    // First, handle consecutive display math blocks by removing extra newlines between them
+    text = text.replace(/\\\]\s+\\\[/g, '\\]\\[');
+    
+    // Extract and store LaTeX blocks, including align environments and inline math
+    text = text.replace(/(\$\$[\s\S]*?\$\$|\$[^\$]*?\$|\\begin\{align\*\}[\s\S]*?\\end\{align\*\}|\\begin\{align\}[\s\S]*?\\end\{align\}|\\\[[\s\S]*?\\\]|\\\([^\)]*?\\\))/g, (match) => {
+      // Pre-process LaTeX content
+      let processedMatch = match
+        // Fix text command spacing
+        .replace(/\\text\{([^}]+)\}/g, '\\text{ $1 }')
+        // Ensure proper sqrt command
+        .replace(/\\sqrt\{([^}]+)\}/g, '\\sqrt{$1}')
+        // Fix spacing around operators
+        .replace(/([0-9])\\approx([0-9])/g, '$1 \\approx $2')
+        // Fix fraction spacing
+        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '\\frac{$1}{$2}')
+        // Fix text command inside equations
+        .replace(/\\text\{([^}]*?)\}/g, (_, content) => {
+          // Escape special characters in text mode
+          return '\\text{' + content.replace(/[_^]/g, '\\$&') + '}';
+        })
+        // Remove extra newlines within display math
+        .replace(/\n\s*/g, ' ');
       
-      // If we detect multiple display math blocks, combine them
-      if (formula.includes('\\]') && formula.includes('\\[')) {
-        formula = formula
-          .replace(/\\\]\s*\\\[/g, ',\\quad ')  // Replace ]\s*[ with ,\quad
-          .replace(/\s*\\\]\s*\\\[\s*/g, ',\\quad ')  // Clean up any remaining spaces
-          .replace(/,\s*,/g, ',')  // Clean up double commas
-          .replace(/\s+/g, ' ')
-          .trim();
+      // Convert inline parentheses to dollar signs if needed
+      if (processedMatch.startsWith('\\(') && processedMatch.endsWith('\\)')) {
+        processedMatch = '$' + processedMatch.slice(2, -2) + '$';
       }
+      
+      blocks.push(processedMatch);
+      return placeholder;
+    });
+    
+    // Render markdown
+    marked.setOptions({
+      gfm: true,
+      breaks: true,
+      headerIds: false,
+      mangle: false,
+      tables: true,
+      sanitize: false
+    });
+    
+    let html = marked.parse(text);
+    
+    // Restore LaTeX blocks
+    blocks.forEach((block) => {
+      html = html.replace(placeholder, block);
+    });
+    
+    // Render LaTeX
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    
+    if (typeof renderMathInElement === 'undefined') {
+      throw new Error('KaTeX auto-render not available');
     }
     
-    // Remove align environments and convert to simple equations
-    if (formula.includes('\\begin{align')) {
-      formula = formula
-        .replace(/\\begin\{align\*?\}([\s\S]*?)\\end\{align\*?\}/g, (_, content) => {
-          return content
-            .split('\\\\')
-            .map(line => line.trim()
-              .replace(/&=/g, '=')
-              .replace(/&/g, '')
-              .trim()
-            )
-            .filter(line => line)
-            .join(',\\quad ');  // Use \quad for spacing between lines
-        });
-    }
+    renderMathInElement(container, window.katexOptions || {});
+    html = container.innerHTML;
     
-    // Always convert to simple mathematical notation
-    formula = formula
-      // Basic cleanup
-      .replace(/\\\\(?=[a-zA-Z{])/g, '\\')
-      .replace(/\\{2,}/g, '\\')
-      .replace(/([^\\])\n/g, '$1 ')
-      .replace(/H/g, '')
-      .trim()
-      
-      // Handle text blocks with proper spacing
-      .replace(/\\text\{([^{}]+)\}/g, (_, text) => {
-        const spacedText = text
-          .replace(/([a-z])([A-Z])/g, '$1 $2')
-          .replace(/\s+/g, ' ')
-          .trim();
-        return `\\text{${spacedText}}`;
-      })
-      
-      // Convert fractions to division
-      .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)')
-      
-      // Convert basic operators
-      .replace(/\\cdot/g, '×')
-      .replace(/\*/g, '×')
-      .replace(/\\times/g, '×')
-      .replace(/\\div/g, '÷')
-      
-      // Convert special symbols
-      .replace(/\\approx/g, '≈')
-      .replace(/\\pm/g, '±')
-      .replace(/\\neq/g, '≠')
-      .replace(/\\geq/g, '≥')
-      .replace(/\\leq/g, '≤')
-      .replace(/\\gt/g, '>')
-      .replace(/\\lt/g, '<')
-      
-      // Convert roots and powers
-      .replace(/\\sqrt\{([^{}]+)\}/g, '√($1)')
-      .replace(/\^2/g, '²')
-      .replace(/\^3/g, '³')
-      .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)')
-      .replace(/[\\{}$]/g, '')
-      .trim();
-
-    const id = `MATH_${blockId++}`;
-    mathBlocks.push({ id, formula, isDisplay });
-    return id;
-  };
-
-  // Handle display math (\[ ... \] and $$ ... $$) first
-  text = text.replace(/\\\[([\s\S]*?)\\\]|\$\$([\s\S]*?)\$\$/g, (match, block1, block2) => {
-    logToBackground('[Mochi-Content] Found display math block');
-    const formula = (block1 || block2)?.trim();
-    if (!formula) return match;
-    return addMathBlock(formula, true);
-  });
-
-  // Handle inline math ($ ... $ and \( ... \))
-  text = text.replace(/\$(\S[^\$\n]*?\S)\$|\$(\S)\$|\\\(([\s\S]*?)\\\)/g, (match, block1, block2, block3) => {
-    logToBackground('[Mochi-Content] Found inline math expression');
-    // If there's a space after the opening $ or before the closing $, treat as currency
-    if (match.startsWith('$ ') || match.endsWith(' $') || /\$\s*\d+/.test(match)) {
-      logToBackground('[Mochi-Content] Skipping currency value: ' + match);
-      return match;
-    }
-    const formula = (block1 || block2 || block3)?.trim();
-    if (!formula) return match;
-    return addMathBlock(formula, false);
-  });
-
-  // Configure marked options for tables and other features
-  marked.setOptions({
-    gfm: true,
-    breaks: true,
-    headerIds: false,
-    mangle: false,
-    tables: true,
-    renderer: new marked.Renderer()
-  });
-
-  // Create custom renderer to handle tables
-  const renderer = {
-    table(header, body) {
-      return `<div class="table-wrapper"><table class="mochi-table">
-        <thead>${header}</thead>
-        <tbody>${body}</tbody>
-      </table></div>`;
-    },
-    tablerow(content) {
-      return `<tr>${content}</tr>`;
-    },
-    tablecell(content, { header, align }) {
-      const tag = header ? 'th' : 'td';
-      const alignAttr = align ? ` align="${align}"` : '';
-      return `<${tag}${alignAttr}>${content}</${tag}>`;
-    },
-    // Custom link renderer to open in new tab
-    link(href, title, text) {
-      const titleAttr = title ? ` title="${title}"` : '';
-      return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
-    }
-  };
-
-  // Use the custom renderer
-  marked.use({ renderer });
-
-  // Render markdown
-  logToBackground('[Mochi-Content] Rendering markdown with ' + mathBlocks.length + ' math blocks');
-  let html = marked.parse(text);
-
-  // Replace math blocks with rendered LaTeX
-  mathBlocks.forEach(({ id, formula, isDisplay }) => {
-    try {
-      logToBackground(`[Mochi-Content] Attempting to render LaTeX for block ${id}:`);
-      logToBackground(`Formula: ${formula.substring(0, 100)}${formula.length > 100 ? '...' : ''}`);
-      logToBackground(`Display mode: ${isDisplay}, Length: ${formula.length}`);
-      
-      // Analyze formula complexity
-      const braceCount = (formula.match(/[\{\}]/g) || []).length;
-      const commandCount = (formula.match(/\\/g) || []).length;
-      logToBackground(`Complexity metrics - Braces: ${braceCount}, Commands: ${commandCount}`);
-      
-      // Validate formula before rendering
-      if (formula.length > 500) {
-        throw new Error('Formula too long');
-      }
-
-      const katexOptions = {
-        displayMode: isDisplay,
-        throwOnError: false,
-        output: 'html',
-        strict: false,
-        trust: true,
-        maxSize: 100,
-        maxExpand: 100,
-        macros: {
-          "\\approx": "\\mathbin{\\approx}"  // Only keep approx macro for proper spacing
-        }
-      };
-
-      // Try rendering with KaTeX
-      logToBackground('[Mochi-Content] Calling KaTeX.renderToString');
-      const rendered = katex.renderToString(formula, katexOptions);
-      logToBackground('[Mochi-Content] KaTeX rendering successful');
-      html = html.replace(id, rendered);
-      
-    } catch (err) {
-      const errorDetails = {
-        message: err.message,
-        stack: err.stack,
-        formula: formula.substring(0, 100) + (formula.length > 100 ? '...' : ''),
-        formulaLength: formula.length
-      };
-      logToBackground(`[Mochi-Content] LaTeX error details: ${JSON.stringify(errorDetails, null, 2)}`, true);
-      
-      // Simple fallback: convert to plain text with basic formatting
-      let fallback = formula
-        .replace(/\\text\{([^{}]+)\}/g, '$1')
-        .replace(/\\approx/g, '≈')
-        .replace(/\\sqrt\{([^{}]+)\}/g, '√($1)')
-        .replace(/\^2/g, '²')
-        .replace(/\^3/g, '³')
-        .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '($1)/($2)')
-        .replace(/[\\{}$]/g, '')
-        .trim();
-
-      logToBackground('[Mochi-Content] Using fallback rendering');
-      if (isDisplay) {
-        html = html.replace(id, `<div class="katex-display"><span class="katex">${fallback}</span></div>`);
-      } else {
-        html = html.replace(id, `<span class="katex">${fallback}</span>`);
-      }
-    }
-  });
-
-  logToBackground('[Mochi-Content] Markdown rendering completed');
-  return html;
+    logToBackground('[Mochi-Content] Rendering complete');
+    return html;
+    
+  } catch (err) {
+    logToBackground(`[Mochi-Content] Error: ${err.message}`, true);
+    return marked.parse(text);
+  }
 }
 
 /**
@@ -1154,8 +1085,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  */
 async function initializeContent() {
   try {
-    logToBackground('[Mochi-Content] Initializing content script...');
-    
+    logToBackground('[Mochi-Content] Starting initialization');
+
     // Check if current page is a dynamic web app
     isDynamicWebApp = await checkIfDynamicWebApp();
     
@@ -1165,7 +1096,8 @@ async function initializeContent() {
       createChatInterface(),
       hideChatInterface(),
       extractPageText(),
-      checkIfDynamicWebApp()
+      checkIfDynamicWebApp(),
+      initializeKaTeX()
     ]);
     
     logToBackground('[Mochi-Content] Content script initialized successfully');

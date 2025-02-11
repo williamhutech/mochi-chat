@@ -44,7 +44,7 @@ const { getHistory, addToHistory } = conversationModule;
 
 /**
  * AI Provider Configuration
- * Currently supports Gemini and OpenAI
+ * Defines available AI providers and their models
  */
 const AI_PROVIDERS = {
   GEMINI: 'gemini',
@@ -58,19 +58,12 @@ const AI_PROVIDERS = {
 const CURRENT_PROVIDER = AI_PROVIDERS.OPENAI;
 
 /**
- * API Keys for different providers
- */
-const API_KEYS = {
-  [AI_PROVIDERS.OPENAI]: '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',
-  [AI_PROVIDERS.GEMINI]: 'AIzaSyDrjcE-XasBhvv38xr8ra7hGHcG7DpwMA8' // Replace with actual key
-};
-
-/**
- * Model configuration for different providers
+ * Model Configuration
+ * Maps providers to their default models
  */
 const AI_MODELS = {
-  [AI_PROVIDERS.OPENAI]: 'gpt-4o',
-  [AI_PROVIDERS.GEMINI]: 'gemini-2.0-flash-exp'
+  [AI_PROVIDERS.OPENAI]: 'gpt-4o-mini',
+  [AI_PROVIDERS.GEMINI]: 'gemini-2.0-flash'
 };
 
 /**
@@ -175,7 +168,7 @@ export async function generateChatGPTResponse(prompt, screenshot, config) {
     if (config.provider === AI_PROVIDERS.OPENAI) {
       await streamOpenAIResponse(messages, config.model);
     } else if (config.provider === AI_PROVIDERS.GEMINI) {
-      await streamGeminiResponse(messages);
+      await streamGeminiResponse(messages, config.model);
     }
     
     // Add the prompt to history
@@ -339,10 +332,11 @@ async function streamOpenAIResponse(messages, model) {
  * 4. Send updates to UI
  * 
  * @param {Array<Object>} messages - Array of message objects for Gemini
+ * @param {string} model - The model to use
  * @returns {Promise<Object>} Object indicating success or failure
  * @throws {Error} If streaming fails
  */
-async function streamGeminiResponse(messages) {
+async function streamGeminiResponse(messages, model) {
   try {
     const response = await fetch(API_ENDPOINT, {
       method: 'POST',
@@ -352,7 +346,7 @@ async function streamGeminiResponse(messages) {
       body: JSON.stringify({
         messages,
         provider: AI_PROVIDERS.GEMINI,
-        model: 'gemini-pro'
+        model
       })
     });
 

@@ -42,12 +42,13 @@
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*", "file:///*"],
-      "js": [
-        "content.js", 
-        "marked.min.js",
-        "katex.min.js"
-      ],
       "css": ["styles.css", "katex.min.css"],
+      "js": [
+        "katex.min.js",
+        "katex-auto-render.min.js",
+        "marked.min.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],

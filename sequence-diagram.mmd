@@ -53,7 +53,7 @@ sequenceDiagram
     participant Background as Background Script<br/>(background.js)
     participant Chat as Chat Module<br/>(chat.js)
     participant Conv as Conversation Manager<br/>(conversation.js)
-    participant API as Backend API<br/>(api/chat.js)
+    participant API as Serverless API<br/>(api/chat.js)
     participant OpenAI as OpenAI Handler<br/>(lib/openai.js)
     participant Gemini as Gemini Handler<br/>(lib/gemini.js)
 
@@ -117,23 +117,21 @@ sequenceDiagram
         critical Process Request
             Chat->>API: POST /api/chat
             activate API
-            Note over Chat,API: {<br/>prompt: string,<br/>provider: "openai" | "gemini",<br/>model: string,<br/>screenshot?: string,<br/>history?: Array<Message><br/>}
+            Note over Chat,API: {<br/>messages: Array<Message>,<br/>provider: "openai" | "gemini",<br/>model: string<br/>}
+
+            API->>API: handleMessages()
+            API->>API: extractPromptAndScreenshot()
 
             alt OpenAI Provider
                 API->>OpenAI: new OpenAIHandler()
                 activate OpenAI
-                API->>OpenAI: streamResponse(prompt, model, res, options)
-                OpenAI->>OpenAI: processStreamChunk()
-                OpenAI->>OpenAI: streamTextChunk()
+                API->>OpenAI: streamResponse(messages, model, res)
                 OpenAI-->>API: SSE chunks
                 deactivate OpenAI
             else Gemini Provider
                 API->>Gemini: new GeminiHandler()
                 activate Gemini
-                API->>Gemini: streamResponse(prompt, model, res, options)
-                Gemini->>Gemini: processStream()
-                Gemini->>Gemini: processGeminiChunk()
-                Gemini->>Gemini: streamTextChunk()
+                API->>Gemini: streamResponse(messages, model, res)
                 Gemini-->>API: SSE chunks
                 deactivate Gemini
             end

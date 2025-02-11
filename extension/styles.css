@@ -400,12 +400,11 @@
   * --------------------------------------------------------------------------- */
  .katex { 
   font-size: inherit !important;
-  font-family: inherit !important;
   line-height: inherit !important;
 }
 
 .katex .katex-html {
-  font-family: inherit !important;
+  /* font-family: inherit !important; */
 }
 
 .katex .mathnormal,
@@ -414,14 +413,19 @@
 .katex .mathsf,
 .katex .mathtt,
 .katex .mathscr {
-  font-family: inherit !important;
+  /* font-family: inherit !important; */
 }
 
+/* KaTeX display math spacing and overflow handling */
 .katex-display {
-  margin: 0.5em 0 !important;  /* Reduce vertical spacing between math blocks */
+  margin: 0.5em 0 !important;  /* Reduce top/bottom margin */
+  padding: 0 !important;       /* Remove padding */
   overflow-x: auto !important;
   overflow-y: hidden !important;
-  text-align: left !important;
+}
+
+.katex-display + .katex-display {
+  margin-top: 0.25em !important;  /* Even smaller gap between consecutive displays */
 }
 
 .katex-display > .katex {
@@ -431,16 +435,6 @@
 .katex {
   font-size: 1.1em !important;
   line-height: 1.5 !important;
-}
-
-/* Adjust spacing for multi-line equations */
-.katex-display .katex-html {
-  display: block !important;
-  position: relative !important;
-}
-
-.katex-display .base {
-  margin: 0.25em 0 !important;
 }
 
  /* Code formatting in math context */
