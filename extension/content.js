@@ -826,33 +826,41 @@ function renderMarkdown(text) {
     text = text.replace(/\\\]\s+\\\[/g, '\\]\\[');
     
     // Extract and store LaTeX blocks, including align environments and inline math
-    text = text.replace(/(\$\$[\s\S]*?\$\$|\$[^\$]*?\$|\\begin\{align\*\}[\s\S]*?\\end\{align\*\}|\\begin\{align\}[\s\S]*?\\end\{align\}|\\\[[\s\S]*?\\\]|\\\([^\)]*?\\\))/g, (match) => {
-      // Pre-process LaTeX content
-      let processedMatch = match
-        // Fix text command spacing
-        .replace(/\\text\{([^}]+)\}/g, '\\text{ $1 }')
-        // Ensure proper sqrt command
-        .replace(/\\sqrt\{([^}]+)\}/g, '\\sqrt{$1}')
-        // Fix spacing around operators
-        .replace(/([0-9])\\approx([0-9])/g, '$1 \\approx $2')
-        // Fix fraction spacing
-        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '\\frac{$1}{$2}')
-        // Fix text command inside equations
-        .replace(/\\text\{([^}]*?)\}/g, (_, content) => {
-          // Escape special characters in text mode
-          return '\\text{' + content.replace(/[_^]/g, '\\$&') + '}';
-        })
-        // Remove extra newlines within display math
-        .replace(/\n\s*/g, ' ');
-      
-      // Convert inline parentheses to dollar signs if needed
-      if (processedMatch.startsWith('\\(') && processedMatch.endsWith('\\)')) {
-        processedMatch = '$' + processedMatch.slice(2, -2) + '$';
-      }
-      
-      blocks.push(processedMatch);
-      return placeholder;
-    });
+    text = text.replace(
+      // Updated regex for more precise matching
+      /(\$\$[\s\S]*?\$\$|(?<!\$)(?<!\w)\$(?!\s)(?:(?!\$).)*?\$(?!\d)(?!\w)|\\begin\{align\*\}[\s\S]*?\\end\{align\*\}|\\begin\{align\}[\s\S]*?\\end\{align\}|\\\[[\s\S]*?\\\]|\\\([^\)]*?\\\))/g,
+      (match) => {
+        // Skip if it looks like a monetary value (e.g. $100, $99.99)
+        if (match.match(/^\$\s*\d+(?:\.\d{2})?$/)) {
+          return match;
+        }
+        
+        // Pre-process LaTeX content
+        let processedMatch = match
+          // Fix text command spacing
+          .replace(/\\text\{([^}]+)\}/g, '\\text{ $1 }')
+          // Ensure proper sqrt command
+          .replace(/\\sqrt\{([^}]+)\}/g, '\\sqrt{$1}')
+          // Fix spacing around operators
+          .replace(/([0-9])\\approx([0-9])/g, '$1 \\approx $2')
+          // Fix fraction spacing
+          .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '\\frac{$1}{$2}')
+          // Fix text command inside equations
+          .replace(/\\text\{([^}]*?)\}/g, (_, content) => {
+            // Escape special characters in text mode
+            return '\\text{' + content.replace(/[_^]/g, '\\$&') + '}';
+          })
+          // Remove extra newlines within display math
+          .replace(/\n\s*/g, ' ');
+        
+        // Convert inline parentheses to dollar signs if needed
+        if (processedMatch.startsWith('\\(') && processedMatch.endsWith('\\)')) {
+          processedMatch = '$' + processedMatch.slice(2, -2) + '$';
+        }
+        
+        blocks.push(processedMatch);
+        return placeholder;
+      });
     
     // Render markdown
     marked.setOptions({
