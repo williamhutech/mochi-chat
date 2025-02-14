@@ -6,12 +6,21 @@
  * 
  * Key Features:
  * - OpenAI API integration with GPT-4o and GPT-4o-mini
- * - Real-time response streaming
- * - Support for text and image inputs
- * - Message history processing
+ * - Real-time response streaming with standardized message types
+ * - Support for text and image inputs with content validation
+ * - Message history processing with type safety
  */
 
 const OpenAI = require('openai');
+const { 
+  MessageRole, 
+  ContentType,
+  isValidRole,
+  isValidContent,
+  isTextContent,
+  isImageUrlContent,
+  createTextContent
+} = require('../types/message');
 
 class OpenAIHandler {
   /**
@@ -31,7 +40,7 @@ class OpenAIHandler {
 
   /**
    * Stream response from OpenAI API
-   * Manages the streaming connection and chunk processing
+   * Manages the streaming connection and chunk processing with type validation
    * 
    * Process:
    * 1. Initialize connection to OpenAI
@@ -46,32 +55,52 @@ class OpenAIHandler {
    * @param {string} [options.screenshot] - Base64 image data for vision models
    * @param {Array<object>} [options.history] - Previous conversation history
    * @returns {Promise<void>} Resolves when streaming is complete
-   * @throws {Error} If streaming or API call fails
+   * @throws {Error} If streaming or API call fails or validation fails
    */
   async streamResponse(prompt, model, res, options = {}) {
     console.log('[Mochi-API] Starting OpenAI stream with model:', model);
     
     try {
-      // Prepare messages array with history if provided
-      const messages = options.history ? [...options.history] : [];
-      
-      // Add current prompt with screenshot if available
-      if (options.screenshot) {
-        messages.push({
-          role: 'user',
-          content: [
-            { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: options.screenshot } }
-          ]
+      // Validate history if provided
+      const messages = [];
+      if (options.history) {
+        options.history.forEach((msg, index) => {
+          if (!isValidRole(msg.role)) {
+            throw new Error(`Invalid role in history message at index ${index}`);
+          }
+          if (!isValidContent(msg.content)) {
+            throw new Error(`Invalid content in history message at index ${index}`);
+          }
+          messages.push(msg);
         });
-      } else {
-        messages.push({ role: 'user', content: prompt });
       }
+      
+      // Create user message with proper content structure
+      const userMessage = {
+        role: MessageRole.USER,
+        content: options.screenshot ? [
+          createTextContent(prompt),
+          {
+            type: ContentType.IMAGE_URL,
+            image_url: {
+              url: options.screenshot,
+              detail: 'high'
+            }
+          }
+        ] : createTextContent(prompt)
+      };
+      
+      messages.push(userMessage);
 
-      // Create stream
+      // Create stream with validated messages
       const stream = await this.client.chat.completions.create({
         model: model,
-        messages: messages,
+        messages: messages.map(msg => ({
+          role: msg.role,
+          content: Array.isArray(msg.content) 
+            ? msg.content 
+            : msg.content.text || msg.content
+        })),
         stream: true,
       });
 

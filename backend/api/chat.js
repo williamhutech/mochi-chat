@@ -33,6 +33,15 @@
 
 const OpenAIHandler = require('../lib/openai');
 const GeminiHandler = require('../lib/gemini');
+const { 
+  MessageRole, 
+  ContentType,
+  isValidRole,
+  isValidContent,
+  isTextContent,
+  isImageUrlContent,
+  createTextContent
+} = require('../types/message');
 
 export const config = {
   api: {
@@ -78,37 +87,71 @@ const ERROR_MESSAGES = {
 
 /**
  * Extract text and image content from message
+ * Validates and extracts content from a structured message
+ * 
  * @param {Object} message - Message object from extension
  * @returns {Object} Extracted content and screenshot
+ * @throws {Error} If message content is invalid
  */
 function extractContent(message) {
-  if (!Array.isArray(message.content)) {
+  if (!message || !isValidRole(message.role)) {
+    throw new Error('Invalid message format: missing or invalid role');
+  }
+
+  if (!isValidContent(message.content)) {
+    throw new Error('Invalid message content format');
+  }
+
+  // Handle string content by converting to TextContent
+  if (typeof message.content === 'string') {
     return { text: message.content, screenshot: null };
   }
 
-  const textPart = message.content.find(part => part.type === 'text');
-  const imagePart = message.content.find(part => part.type === 'image_url');
+  // Handle array content with proper validation
+  if (Array.isArray(message.content)) {
+    const textPart = message.content.find(part => isTextContent(part));
+    const imagePart = message.content.find(part => isImageUrlContent(part));
 
-  return {
-    text: textPart?.text || '',
-    screenshot: imagePart?.image_url?.url || null
-  };
+    if (!textPart) {
+      throw new Error('Message must contain text content');
+    }
+
+    return {
+      text: textPart.text,
+      screenshot: imagePart?.image_url?.url || null
+    };
+  }
+
+  throw new Error('Unsupported message content format');
 }
 
 /**
  * Process messages array to extract latest prompt and screenshot
+ * Validates and processes the message array to extract the latest user input
+ * 
  * @param {Array} messages - Array of message objects
  * @returns {Object} Latest prompt and screenshot
+ * @throws {Error} If messages array is invalid or no user message found
  */
 function processMessages(messages) {
   if (!Array.isArray(messages) || messages.length === 0) {
-    throw new Error('Invalid messages format');
+    throw new Error('Invalid messages format: must be non-empty array');
   }
 
+  // Validate all messages in the array
+  messages.forEach((msg, index) => {
+    if (!isValidRole(msg.role)) {
+      throw new Error(`Invalid role in message at index ${index}`);
+    }
+    if (!isValidContent(msg.content)) {
+      throw new Error(`Invalid content format in message at index ${index}`);
+    }
+  });
+
   // Get the last user message
-  const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
+  const lastUserMessage = [...messages].reverse().find(msg => msg.role === MessageRole.USER);
   if (!lastUserMessage) {
-    throw new Error('No user message found');
+    throw new Error('No user message found in conversation');
   }
 
   return extractContent(lastUserMessage);

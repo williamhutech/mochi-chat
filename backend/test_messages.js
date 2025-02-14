@@ -6,7 +6,7 @@
 import('node-fetch').then(({ default: fetch }) => {
   require('dotenv').config();
 
-  const API_URL = 'https://mochi-chat-gb30ssit2-maniifold.vercel.app/api/chat';
+  const API_URL = 'https://mochi-chat-api-v2-ngwr9s4nn-maniifold.vercel.app/api/chat';
 
   /**
    * Send request to chat API and handle streaming response
@@ -106,7 +106,8 @@ import('node-fetch').then(({ default: fetch }) => {
             { 
               type: 'image_url',
               image_url: {
-                url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+                url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+                detail: 'high'
               }
             }
           ]
@@ -129,7 +130,8 @@ import('node-fetch').then(({ default: fetch }) => {
             { 
               type: 'image_url',
               image_url: {
-                url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+                url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+                detail: 'high'
               }
             }
           ]

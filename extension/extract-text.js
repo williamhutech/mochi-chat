@@ -13,7 +13,40 @@
  * - Content type-specific optimizations
  */
 
-import { addExtractedText } from './conversation.js';
+//=============================================================================
+// Module State
+//=============================================================================
+
+let initialized = false;
+let addExtractedText;
+
+/**
+ * Initialize required modules
+ * @returns {Promise<void>}
+ */
+async function initializeModules() {
+  if (initialized) return;
+  
+  try {
+    const conversationModule = await import(chrome.runtime.getURL('./conversation.js'));
+    ({ addExtractedText } = conversationModule);
+    await conversationModule.initializeModules();
+    
+    initialized = true;
+    logToBackground('[Mochi-Extract] Modules initialized successfully');
+  } catch (error) {
+    // Handle extension context invalidation
+    if (error.message.includes('Extension context invalidated')) {
+      logToBackground('Extension context invalidated, reloading modules', true);
+      initialized = false;
+      // Retry initialization after a short delay
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return initializeModules();
+    }
+    logToBackground('[Mochi-Extract] Error initializing modules: ' + error.message, true);
+    throw error;
+  }
+}
 
 //=============================================================================
 // Constants and Types
@@ -532,103 +565,69 @@ async function extractFromPDF(file) {
  * @returns {Promise<string>} The extracted text
  * @throws {Error} If extraction fails or invalid options provided
  */
-async function extractText(options) {
+export async function extractText(options) {
   try {
-    logToBackground(`[Mochi-Extract] Starting text extraction for type: ${options.type}`);
-    let extractedText = '';
+    await initializeModules();
     
-    switch (options.type) {
-      case CONTENT_TYPES.WEBSITE:
-        logToBackground('[Mochi-Background] Waiting for content to stabilize');
-        
-        // Create a promise that resolves when content stabilizes
-        const stableText = await new Promise((resolve) => {
-          let lastContentLength = 0;
-          let stabilityCounter = 0;
-          
-          const observer = new MutationObserver(async () => {
-            const currentText = await extractFromWebsite();
-            const currentLength = currentText.trim().length;
-            
-            if (currentLength === lastContentLength) {
-              stabilityCounter++;
-              if (stabilityCounter >= 2) { // Content has stabilized for 2 consecutive checks
-                logToBackground('[Mochi-Background] Content has stabilized, proceeding with extraction');
-                observer.disconnect();
-                resolve(currentText);
-              }
-            } else {
-              stabilityCounter = 0;
-            }
-            lastContentLength = currentLength;
-          });
-          
-          // Observe document body for changes (childlist > subtree > characterdata)
-          observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-            characterData: true
-          });
-          
-          // Set a maximum wait time of 10 seconds
-          setTimeout(async () => {
-            observer.disconnect();
-            const finalText = await extractFromWebsite();
-            const textLength = finalText ? finalText.trim().length : 0;
-            logToBackground(`[Mochi-Background] Reached timeout, saving current content (${textLength} characters)`);
-            
-            // Add main logging section here
-            logToBackground(`Extracted ${options.type} Text`);
-            logToBackground(finalText);
-            logToBackground(`End of ${options.type} Text`);
-            logToBackground(`Total characters extracted: ${finalText.length}`);
-            
-            if (finalText && finalText.trim().length > 0) {
-              await addExtractedText(finalText);
-            }
-            resolve(finalText);
-          }, 6000);
-          
-          // Trigger initial check
-          extractFromWebsite().then(text => {
-            lastContentLength = text.trim().length;
-          });
-        });
-        
-        extractedText = stableText;
-        break;
-      case CONTENT_TYPES.PDF:
-        if (!options.file) {
-          throw new Error('PDF file data is required');
-        }
-        extractedText = await extractFromPDF(options.file);
-        break;
-      default:
-        throw new Error(`Unsupported content type: ${options.type}`);
+    logToBackground(`Starting extraction for ${options.type}`);
+    
+    // Validate options
+    if (!options || !options.type) {
+      throw new Error('Invalid options: type is required');
     }
     
-    // Don't throw if no text is found, just log a warning
-    if (!extractedText) {
-      logToBackground('Warning: No text could be extracted');
-      extractedText = '';
+    if (!Object.values(CONTENT_TYPES).includes(options.type)) {
+      throw new Error(`Invalid content type: ${options.type}`);
     }
-
-    // Log the full extracted text to background console
-    logToBackground(`Extracted ${options.type} Text`);
-    logToBackground(extractedText);
-    logToBackground(`End of ${options.type} Text`);
-    logToBackground(`Total characters extracted: ${extractedText.length}`);
-
-    // Add extracted text to conversation history in one go
+    
+    // Extract based on type
+    let extractedText;
+    if (options.type === CONTENT_TYPES.PDF) {
+      if (!options.file) {
+        throw new Error('PDF extraction requires file data');
+      }
+      extractedText = await extractFromPDF(options.file);
+    } else {
+      extractedText = await extractFromWebsite();
+    }
+    
+    // Add extracted text to conversation history
     if (extractedText) {
-      addExtractedText(extractedText);
+      logToBackground('=== Extracted Text ===');
+      logToBackground(extractedText);
+      logToBackground('=== End Extracted Text ===');
+      logToBackground(`Total characters extracted: ${extractedText.length}`);
+      
+      await addExtractedText(extractedText);
+      
+      // Get conversation history to verify
+      const { getHistory } = await import(chrome.runtime.getURL('./conversation.js'));
+      const history = await getHistory();
+      logToBackground('=== Conversation History After Extraction ===');
+      history.forEach((msg, i) => {
+        logToBackground(`Message ${i + 1}:`);
+        logToBackground(`Role: ${msg.role}`);
+        logToBackground(`Content: ${JSON.stringify(msg.content, null, 2)}`);
+        logToBackground('---');
+      });
+      logToBackground('=== End Conversation History ===');
     }
     
     return extractedText;
+    
   } catch (error) {
-    logToBackground(`[Mochi-Extract] Error in text extraction: ${error}`, true);
+    // Handle extension context invalidation
+    if (error.message.includes('Extension context invalidated')) {
+      logToBackground('Extension context invalidated during extraction, retrying', true);
+      initialized = false;
+      // Retry after a short delay
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return extractText(options);
+    }
+    
+    logToBackground(`Error during extraction: ${error.message}`, true);
     throw error;
   }
 }
 
-export { extractText, CONTENT_TYPES };
+export { CONTENT_TYPES };

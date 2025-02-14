@@ -24,8 +24,12 @@
  * @type {boolean} initialized - Initialization state flag
  * @type {Object} chatModule - Chat module reference
  * @type {string} accumulatedResponse - Accumulated response from chat.js
- * @type {boolean} isDynamicWebApp - Flag to indicate if current page is a dynamic web application
+ * @type {boolean} isDynamic - Flag to indicate if current page is a dynamic web application
  * @type {boolean} isStreaming - Flag to prevent multiple prompts during streaming
+ * @type {Object} conversationModule - Conversation module reference
+ * @type {Object} messageTypes - Message types reference
+ * @type {Object} AI_PROVIDERS - AI provider configuration
+ * @type {Object} AI_MODELS - AI model configuration
  */
 let chatInterface = null;        
 let inputField = null;         
@@ -35,50 +39,59 @@ let lastResponse = '';
 let initialized = false;         
 let chatModule;                  
 let accumulatedResponse = '';    
-let isDynamicWebApp = false;     
+let isDynamic = false;     
 let isStreaming = false;
-
-/**
- * AI Provider configuration
- * Defines available providers and their models
- */
-const AI_PROVIDERS = {
-  OPENAI: 'openai',
-  GEMINI: 'gemini'
-};
-
-/**
- * AI Model configuration
- * Models are selected based on whether the current page is a dynamic web app
- */
-const AI_MODELS = {
-  [AI_PROVIDERS.OPENAI]: {
-    default: 'gpt-4o-mini',
-    webApp: 'gpt-4o'
-  },
-  [AI_PROVIDERS.GEMINI]: 'gemini-2.0-flash'
-};
-
-let currentProvider = AI_PROVIDERS.OPENAI;
-let currentModel = AI_MODELS[AI_PROVIDERS.OPENAI].default;
+let conversationModule;          // Add conversation module reference
+let messageTypes;               // Add message types reference
+let AI_PROVIDERS;               // Will be imported from chat.js
+let AI_MODELS;                  // Will be imported from chat.js
+let currentProvider;            // Will be set after modules load
+let currentModel;               // Will be set after modules load
 
 //=============================================================================
 // Core Module Loading
 //=============================================================================
 
 /**
- * Load chat module dynamically
- * Imports chat.js using chrome.runtime.getURL
+ * Initialize required modules
+ * Loads chat, conversation, message types, and extract-text modules
  * @returns {Promise<void>}
  */
-async function loadChatModule() {
-  if (!chatModule) {
+async function initializeModules() {
+  try {
+    // Load message types first as it's required by other modules
+    const messageTypesUrl = chrome.runtime.getURL('types/message.js');
+    messageTypes = await import(messageTypesUrl);
+    
+    // Load conversation module
+    const conversationUrl = chrome.runtime.getURL('conversation.js');
+    conversationModule = await import(conversationUrl);
+    await conversationModule.initializeModules();
+
+    // Load chat module and initialize it first
     const chatModuleUrl = chrome.runtime.getURL('chat.js');
-    const { generateChatGPTResponse } = await import(chatModuleUrl);
-    chatModule = { generateChatGPTResponse };
-    logToBackground('Chat module loaded');
+    const chatModuleImport = await import(chatModuleUrl);
+    await chatModuleImport.initializeModules();
+    
+    // After chat module is initialized, set up our references
+    chatModule = { generateChatGPTResponse: chatModuleImport.generateChatGPTResponse };
+    AI_PROVIDERS = chatModuleImport.AI_PROVIDERS;
+    AI_MODELS = chatModuleImport.AI_MODELS;
+    
+    // Set default provider and model after imports
+    currentProvider = AI_PROVIDERS.OPENAI;
+    currentModel = AI_MODELS[AI_PROVIDERS.OPENAI].default;
+
+    // Load extract-text module
+    const extractModuleUrl = chrome.runtime.getURL('extract-text.js');
+    const { extractText, CONTENT_TYPES } = await import(extractModuleUrl);
+    extractModule = { extractText, CONTENT_TYPES };
+    
+    logToBackground('[Mochi-Content] All modules initialized successfully');
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error initializing modules: ' + error.message, true);
+    throw error;
   }
-  return chatModule;
 }
 
 //=============================================================================
@@ -343,16 +356,6 @@ function resetUIState() {
  */
 async function extractPageText() {
   try {
-    // Load extract-text.js if not loaded
-    if (!extractModule) {
-      const extractModuleUrl = chrome.runtime.getURL('extract-text.js');
-      const [{ extractText, CONTENT_TYPES }] = await Promise.all([
-        import(extractModuleUrl)
-      ]);
-      extractModule = { extractText, CONTENT_TYPES };
-      logToBackground('[Mochi-Content] Text extraction module loaded');
-    }
-
     // Detect content type and prepare extraction options
     const isPDF = document.contentType === 'application/pdf' || 
                   window.location.href.toLowerCase().endsWith('.pdf');
@@ -409,8 +412,12 @@ async function extractPageText() {
 
     // Extract text using the appropriate method
     logToBackground(`[Mochi-Content] Starting extraction`);
-    await extractModule.extractText(extractionOptions);
-    logToBackground('[Mochi-Content] Text extraction completed');
+    const extractedText = await extractModule.extractText(extractionOptions);
+    
+    // Add extracted text to conversation history
+    await conversationModule.addExtractedText(extractedText);
+    
+    logToBackground('[Mochi-Content] Text extraction completed and added to conversation');
     
   } catch (error) {
     logToBackground(`[Mochi-Content] Error extracting text: ${error}`, true);
@@ -608,6 +615,8 @@ async function sendPrompt(prompt) {
     if (isStreaming) return;
     
     isStreaming = true;
+    logToBackground('[Mochi-Content] Starting prompt send...');
+    
     // First show chat interface
     showChatInterface();
 
@@ -619,7 +628,7 @@ async function sendPrompt(prompt) {
     let screenshot = null;
     
     // Only capture screenshot for dynamic web apps
-    if (isDynamicWebApp) {
+    if (isDynamic) {
       logToBackground('[Mochi-Content] Capturing screenshot for dynamic web app');
       screenshot = await captureScreenWithoutInterface();
     }
@@ -631,12 +640,36 @@ async function sendPrompt(prompt) {
     container.classList.remove('has-content');
     submitButton.disabled = true;
     
-    // Get chat module and generate response
-    const chat = await loadChatModule();
-    await chat.generateChatGPTResponse(prompt, screenshot, {
-      provider: AI_PROVIDERS.OPENAI,
-      model: isDynamicWebApp ? AI_MODELS[AI_PROVIDERS.OPENAI].webApp : AI_MODELS[AI_PROVIDERS.OPENAI].default
-    });
+    // Create message content
+    const messageContent = screenshot ? [
+      messageTypes.createTextContent(prompt),
+      messageTypes.createImageUrlContent(screenshot)
+    ] : [messageTypes.createTextContent(prompt)];
+    
+    // Create user message
+    const userMessage = {
+      role: messageTypes.MessageRole.USER,
+      content: messageContent
+    };
+    
+    // Create config
+    const config = {
+      provider: currentProvider,
+      model: isDynamic ? AI_MODELS[currentProvider].webApp : AI_MODELS[currentProvider].default
+    };
+    
+    // Enhanced logging for debugging
+    logToBackground(`[Mochi-Content] === Prompt Details ===`);
+    logToBackground(`[Mochi-Content] Is Dynamic: ${isDynamic}`);
+    logToBackground(`[Mochi-Content] Model: ${config.model}`);
+    logToBackground(`[Mochi-Content] Screenshot Captured: ${screenshot ? 'Yes' : 'No'}`);
+    logToBackground(`[Mochi-Content] Content Types: ${messageContent.map(c => c.type).join(', ')}`);
+    logToBackground(`[Mochi-Content] Prompt: ${prompt}`);
+    logToBackground(`[Mochi-Content] Full Message:\n${JSON.stringify(userMessage, null, 2)}`);
+    logToBackground(`[Mochi-Content] Config:\n${JSON.stringify(config, null, 2)}`);
+    
+    // Generate response using chatModule
+    await chatModule.generateChatGPTResponse(userMessage, config);
     
   } catch (error) {
     logToBackground(`[Mochi-Content] Error sending prompt: ${error}`, true);
@@ -669,6 +702,7 @@ function handleStreamingUpdate(update) {
 
     // Handle error case
     if (update.error) {
+      logToBackground(`[Mochi-Content] Streaming error: ${update.error}`, true);
       submitButton.classList.remove('loading');
       isStreaming = false;
       showError(update.error);
@@ -678,6 +712,8 @@ function handleStreamingUpdate(update) {
     
     // Handle streaming text
     if (update.text) {
+      logToBackground(`[Mochi-Content] Received streaming update: "${update.text}"`);
+      
       // Accumulate and render new text
       accumulatedResponse += update.text;
       const processedText = renderMarkdown(accumulatedResponse);
@@ -685,45 +721,30 @@ function handleStreamingUpdate(update) {
       
       // Check if we need to auto-expand
       checkAndExpandContent(outputField);
-      
-      logToBackground(`Updated output with text: ${update.text}`);
     }
     
     // Handle final update
     if (update.isFinal) {
-      // Process final text with page links
-      const finalText = createPageLinks(outputField.innerHTML);
-      outputField.innerHTML = finalText;
-
-      // Save the final response
-      lastResponse = finalText;
+      logToBackground('[Mochi-Content] Processing final update');
+      
+      if (accumulatedResponse) {
+        // Process final text with page links
+        const finalText = createPageLinks(outputField.innerHTML);
+        outputField.innerHTML = finalText;
+        lastResponse = finalText;
+      }
       
       // Check if we need to auto-expand
       checkAndExpandContent(outputField);
       
       submitButton.classList.remove('loading');
+      submitButton.disabled = false;
       isStreaming = false;
-      
-      // Reset accumulated response
-      logToBackground(accumulatedResponse) //delete later
       accumulatedResponse = '';
-      
-      logToBackground('Processed final update');
-    } else if (update.isFinal && !update.text) {
-      // Handle final update without text
-      submitButton.classList.remove('loading');
-      isStreaming = false;
-      
-      // Reset accumulated response
-      accumulatedResponse = '';
-      
-      logToBackground('Processed final update without text');
     }
   } catch (error) {
-    logToBackground(`Error handling stream update: ${error}`, true);
+    logToBackground(`[Mochi-Content] Error handling streaming update: ${error}`, true);
     showError('Failed to process response');
-    document.getElementById('mochi-chat-submit-button').classList.remove('loading');
-    isStreaming = false;
     resetUIState();
   }
 }
@@ -978,14 +999,19 @@ function cleanupCanvases(canvases) {
 
 /**
  * Utility function to send logs to background script
- * @param {string} message - Message to log
- * @param {boolean} isError - Whether this is an error message
+ * Accepts multiple parameters which are concatenated to a single string
+ * @param {...*} args - Log messages, with an optional final boolean flag indicating error
  * @returns {void}
  */
-function logToBackground(message, isError = false) {
+function logToBackground(...args) {
+  let isError = false;
+  if (typeof args[args.length - 1] === 'boolean') {
+    isError = args.pop();
+  }
+  const message = args.join(' ');
   chrome.runtime.sendMessage({
     action: 'logFromContent',
-    message: message,
+    message,
     source: 'Mochi-Content',
     isError
   });
@@ -1005,28 +1031,54 @@ function showError(message) {
 //=============================================================================
 
 /**
- * Check if current page is a dynamic web application
- * Uses patterns defined in dynamic-apps.js
- * @returns {Promise<boolean>} True if current page matches dynamic app patterns
+ * Load dynamic app patterns from the configuration file
+ * @returns {Promise<Array>} Array of dynamic app patterns
+ * @throws {Error} If module loading fails
+ */
+async function loadDynamicAppsModule() {
+  try {
+    const { DYNAMIC_APP_PATTERNS } = await import(chrome.runtime.getURL('./dynamic-apps.js'));
+    return DYNAMIC_APP_PATTERNS;
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error loading dynamic apps module: ' + error.message, true);
+    throw error;
+  }
+}
+
+/**
+ * Check if the current webpage is a dynamic web application
+ * This affects how we handle text extraction and API requests
+ * Also updates the AI provider and model based on the result
+ * @returns {Promise<boolean>} True if current page is a dynamic web app
  */
 async function checkIfDynamicWebApp() {
   try {
-    const { DYNAMIC_APP_PATTERNS } = await import(chrome.runtime.getURL('./dynamic-apps.js'));
+    const DYNAMIC_APP_PATTERNS = await loadDynamicAppsModule();
     const currentUrl = window.location.href;
     const currentDomain = window.location.hostname;
     
     logToBackground('[Mochi-Content] Checking if dynamic web app...');
+    logToBackground(`[Mochi-Content] Current domain: ${currentDomain}`);
     
     // Check if current site matches any pattern
-    const isDynamic = DYNAMIC_APP_PATTERNS.some(pattern => {
-      if (!currentDomain.includes(pattern.domain)) {
+    const isMatch = DYNAMIC_APP_PATTERNS.some(pattern => {
+      const domainMatch = currentDomain.includes(pattern.domain);
+      logToBackground(`[Mochi-Content] Checking domain ${pattern.domain}: ${domainMatch}`);
+      
+      if (!domainMatch) {
         return false;
       }
+      
       if (pattern.paths) {
-        return pattern.paths.some(path => currentUrl.includes(path));
+        const pathMatch = pattern.paths.some(path => currentUrl.includes(path));
+        logToBackground(`[Mochi-Content] Checking paths for ${pattern.domain}: ${pathMatch}`);
+        return pathMatch;
       }
       return true;
     });
+    
+    // Update global isDynamic flag
+    isDynamic = isMatch;
     
     // Update provider and model based on web app detection
     if (isDynamic) {
@@ -1044,6 +1096,7 @@ async function checkIfDynamicWebApp() {
     
   } catch (error) {
     logToBackground('[Mochi-Content] Error checking dynamic web app status: ' + error.message, true);
+    isDynamic = false;
     return false;
   }
 }
@@ -1093,25 +1146,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  */
 async function initializeContent() {
   try {
-    logToBackground('[Mochi-Content] Starting initialization');
-
-    // Check if current page is a dynamic web app
-    isDynamicWebApp = await checkIfDynamicWebApp();
+    if (initialized) return;
     
-    // Initialize UI components and extract text
-    await Promise.all([
-      initializeChatInput(),
-      createChatInterface(),
-      hideChatInterface(),
-      extractPageText(),
-      checkIfDynamicWebApp(),
-      initializeKaTeX()
-    ]);
+    // Initialize all required modules first
+    await initializeModules();
     
+    // Create UI components
+    await createChatInterface();
+    await initializeChatInput();
+    
+    // Extract page text and initialize conversation
+    await extractPageText();
+    await checkIfDynamicWebApp();
+    
+    initialized = true;
     logToBackground('[Mochi-Content] Content script initialized successfully');
-    
   } catch (error) {
-    logToBackground(`[Mochi-Content] Error initializing content: ${error}`, true);
+    logToBackground('[Mochi-Content] Initialization error: ' + error.message, true);
+    showError('Failed to initialize chat interface');
   }
 }
 

@@ -6,13 +6,53 @@
  * the AI instructions and context.
  * 
  * Key Features:
- * - Conversation history management
- * - Context preservation
+ * - Conversation history management with typed messages
+ * - Context preservation with standardized content types
  * - AI instruction management
- * - Message history tracking
+ * - Message history tracking with validation
  * 
  * @module conversation
  */
+
+//=============================================================================
+// Module State
+//=============================================================================
+
+let initialized = false;
+let MessageRole;
+let ContentType;
+let isValidRole;
+let isValidContent;
+let createTextContent;
+let conversationHistory = [];
+
+/**
+ * Initialize required modules
+ * @returns {Promise<void>}
+ */
+export async function initializeModules() {
+  if (initialized) return;
+  
+  try {
+    const messageTypes = await import(chrome.runtime.getURL('./types/message.js'));
+    ({ 
+      MessageRole, 
+      ContentType,
+      isValidRole,
+      isValidContent,
+      createTextContent
+    } = messageTypes);
+    
+    // Initialize empty conversation history
+    conversationHistory = [];
+    
+    initialized = true;
+    logToBackground('[Mochi-Conversation] Modules initialized successfully');
+  } catch (error) {
+    logToBackground('[Mochi-Conversation] Error initializing modules: ' + error.message, true);
+    throw error;
+  }
+}
 
 //=============================================================================
 // Constants and Configuration
@@ -35,7 +75,7 @@ const CHAT_INSTRUCTIONS = `Based on the text above:
 - Use bullet points or numbering when appropriate
 - Only when asked about which page, answer the page numbers from the PDF text and in relevance to the query or most recent conversation.
 - When asked about a question involving some calculation, show full calculation and answer, only up to 2 decimals.
-- To display complex math, you must wrap your expressions with: “$$...$$” and for inline math, use: “$…$”.
+- To display complex math, you must wrap your expressions with: "$$...$$" and for inline math, use: "$…$".
 
 Main instruction/ask: `;
 
@@ -45,10 +85,9 @@ Main instruction/ask: `;
 
 /**
  * Conversation history array
- * Stores all messages in the conversation including system context
- * @type {Array<{role: string, content: string}>}
+ * Stores all messages in the conversation including system messages
+ * @type {Array<import('./types/message.js').Message>}
  */
-let conversationHistory = [];
 
 //=============================================================================
 // History Management Functions
@@ -62,15 +101,26 @@ let conversationHistory = [];
  * @returns {void}
  * @throws {Error} If text addition fails
  */
-export function addExtractedText(extractedText) {
+export async function addExtractedText(extractedText) {
+  await initializeModules();
   try {
     // Clear existing history when new text is extracted
     conversationHistory = [];
-    
+        
     // Add system message with extracted text and instructions
-    conversationHistory.push({
-      role: 'system',
-      content: extractedText + '\n\n' + CHAT_INSTRUCTIONS
+    const systemMessage = {
+      role: MessageRole.SYSTEM,
+      content: createTextContent(extractedText + '\n\n' + CHAT_INSTRUCTIONS)
+    };
+    
+    conversationHistory.push(systemMessage);
+    
+    logToBackground('=== Current Conversation History ===');
+    conversationHistory.forEach((msg, i) => {
+      logToBackground(`Message ${i + 1}:`);
+      logToBackground(`Role: ${msg.role}`);
+      logToBackground(`Content: ${JSON.stringify(msg.content, null, 2)}`);
+      logToBackground('---');
     });
     
     logToBackground('Added extracted text to conversation history');
@@ -85,37 +135,54 @@ export function addExtractedText(extractedText) {
  * Appends new messages while preserving context
  * Handles both simple text messages and complex formats (text + image)
  * 
- * @param {Array<{role: string, content: string|Array}>} messages - Array of message objects
+ * @param {Array<import('./types/message.js').Message>|import('./types/message.js').Message} messages - Message object(s) to add
  * @returns {void}
  * @throws {Error} If no history exists or addition fails
  */
-export function addToHistory(messages) {
+export async function addToHistory(messages) {
+  await initializeModules();
+  
   try {
-    // Don't add if no history (means no extracted text)
-    if (conversationHistory.length === 0) {
-      const error = 'Cannot add messages - no extracted text in history';
-      logToBackground(error, true);
-      throw new Error(error);
+    // Convert single message to array for consistent handling
+    const messageArray = Array.isArray(messages) ? messages : [messages];
+    
+    logToBackground(`[Mochi-Conversation] Number of messages to add: ${messageArray.length}`);
+    logToBackground(`[Mochi-Conversation] Role: ${messageArray[0]?.role || 'unknown'}`);
+    logToBackground(`[Mochi-Conversation] Original Content:\n${JSON.stringify(messageArray[0]?.content, null, 2)}`);
+    
+    // Validate and process each message
+    for (const message of messageArray) {
+      // Validate role
+      if (!isValidRole(message.role)) {
+        throw new Error('Invalid message role');
+      }
+      
+      // Handle string content by converting to proper TextContent
+      if (typeof message.content === 'string') {
+        logToBackground('Converting string content to TextContent');
+        message.content = createTextContent(message.content);
+        logToBackground('Converted Content:', JSON.stringify(message.content, null, 2));
+      }
+      
+      // Validate content after potential conversion
+      if (!isValidContent(message.content)) {
+        logToBackground('Invalid content format:', JSON.stringify(message.content, null, 2));
+        throw new Error('Invalid message content format');
+      }
+      
+      // Add message to history
+      conversationHistory.push(message);
     }
     
-    // Ensure messages is an array
-    const messagesToAdd = Array.isArray(messages) ? messages : [messages];
-    
-    // Add each message, handling both string and array content types
-    messagesToAdd.forEach(message => {
-      if (message && typeof message === 'object' && 'role' in message) {
-        // For complex messages (like those with screenshots), preserve the entire structure
-        conversationHistory.push(message);
-        
-        // Log the type of message being added
-        const contentType = Array.isArray(message.content) ? 'complex' : 'text';
-        logToBackground(`Added ${contentType} message from ${message.role}`);
-      } else {
-        logToBackground('Invalid message format: ' + JSON.stringify(message), true);
-      }
+    logToBackground('=== Current Conversation History ===');
+    conversationHistory.forEach((msg, i) => {
+      logToBackground(`Message ${i + 1}:`);
+      logToBackground(`Role: ${msg.role}`);
+      logToBackground(`Content: ${JSON.stringify(msg.content, null, 2)}`);
+      logToBackground('---');
     });
     
-    logToBackground(`Added ${messagesToAdd.length} messages to history. Total: ${conversationHistory.length}`);
+    logToBackground('Added messages to history');
   } catch (error) {
     logToBackground('Failed to add to history: ' + error.message, true);
     throw error;
@@ -128,7 +195,8 @@ export function addToHistory(messages) {
  * 
  * @returns {Array<{role: string, content: string}>} Array of message objects
  */
-export function getHistory() {
+export async function getHistory() {
+  await initializeModules();
   return conversationHistory;
 }
 

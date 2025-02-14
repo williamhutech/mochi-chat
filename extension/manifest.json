@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mochi Chat",
-  "version": "1.5",
+  "version": "1.6",
   "description": "Chat with your PDFs and websites using AI",
   "author": "Team Mochi",
   "icons": {
@@ -65,7 +65,8 @@
         "conversation.js",
         "styles.css",
         "marked.min.js",
-        "dynamic-apps.js"
+        "dynamic-apps.js",
+        "types/message.js"
       ],
       "matches": ["<all_urls>"]
     }
