@@ -58,14 +58,19 @@ export async function initializeModules() {
   if (initialized) return;
   
   try {
+    // Import module registry
+    const moduleRegistryUrl = chrome.runtime.getURL('module-registry.js');
+    const { getModule } = await import(moduleRegistryUrl);
+    
     // Load message types
-    messageTypes = await import(chrome.runtime.getURL('./types/message.js'));
+    messageTypes = await getModule('types/message.js');
     ({ MessageRole, ContentType, createTextContent } = messageTypes);
     
     // Load conversation module
-    conversationModule = await import(chrome.runtime.getURL('./conversation.js'));
+    conversationModule = await getModule('conversation.js', async (module) => {
+      await module.initializeModules();
+    });
     ({ getHistory, addToHistory } = conversationModule);
-    await conversationModule.initializeModules();
     
     initialized = true;
     logToBackground('[Mochi-Chat] Modules initialized successfully');

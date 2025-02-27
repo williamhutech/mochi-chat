@@ -28,9 +28,15 @@ async function initializeModules() {
   if (initialized) return;
   
   try {
-    const conversationModule = await import(chrome.runtime.getURL('./conversation.js'));
+    // Import module registry
+    const moduleRegistryUrl = chrome.runtime.getURL('module-registry.js');
+    const { getModule } = await import(moduleRegistryUrl);
+    
+    // Load conversation module
+    const conversationModule = await getModule('conversation.js', async (module) => {
+      await module.initializeModules();
+    });
     ({ addExtractedText } = conversationModule);
-    await conversationModule.initializeModules();
     
     initialized = true;
     logToBackground('[Mochi-Extract] Modules initialized successfully');

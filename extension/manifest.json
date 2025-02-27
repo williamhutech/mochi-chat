@@ -66,6 +66,7 @@
         "styles.css",
         "marked.min.js",
         "dynamic-apps.js",
+        "module-registry.js",
         "types/message.js"
       ],
       "matches": ["<all_urls>"]

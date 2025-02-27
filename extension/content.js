@@ -59,19 +59,22 @@ let currentModel;               // Will be set after modules load
  */
 async function initializeModules() {
   try {
+    // Import module registry
+    const moduleRegistryUrl = chrome.runtime.getURL('module-registry.js');
+    const { getModule } = await import(moduleRegistryUrl);
+    
     // Load message types first as it's required by other modules
-    const messageTypesUrl = chrome.runtime.getURL('types/message.js');
-    messageTypes = await import(messageTypesUrl);
+    messageTypes = await getModule('types/message.js');
     
     // Load conversation module
-    const conversationUrl = chrome.runtime.getURL('conversation.js');
-    conversationModule = await import(conversationUrl);
-    await conversationModule.initializeModules();
+    conversationModule = await getModule('conversation.js', async (module) => {
+      await module.initializeModules();
+    });
 
     // Load chat module and initialize it first
-    const chatModuleUrl = chrome.runtime.getURL('chat.js');
-    const chatModuleImport = await import(chatModuleUrl);
-    await chatModuleImport.initializeModules();
+    const chatModuleImport = await getModule('chat.js', async (module) => {
+      await module.initializeModules();
+    });
     
     // After chat module is initialized, set up our references
     chatModule = { generateChatGPTResponse: chatModuleImport.generateChatGPTResponse };
@@ -83,9 +86,11 @@ async function initializeModules() {
     currentModel = AI_MODELS[AI_PROVIDERS.OPENAI].default;
 
     // Load extract-text module
-    const extractModuleUrl = chrome.runtime.getURL('extract-text.js');
-    const { extractText, CONTENT_TYPES } = await import(extractModuleUrl);
-    extractModule = { extractText, CONTENT_TYPES };
+    const extractModuleImport = await getModule('extract-text.js');
+    extractModule = { 
+      extractText: extractModuleImport.extractText, 
+      CONTENT_TYPES: extractModuleImport.CONTENT_TYPES 
+    };
     
     logToBackground('[Mochi-Content] All modules initialized successfully');
   } catch (error) {
@@ -625,6 +630,16 @@ async function sendPrompt(prompt) {
     const submitButton = document.getElementById('mochi-chat-submit-button');
     submitButton.classList.add('loading');
     
+    // Show loading placeholder
+    outputField.innerHTML = `
+      <div class="mochi-loading-placeholder">
+        <div class="mochi-loading-line"></div>
+        <div class="mochi-loading-line"></div>
+        <div class="mochi-loading-line"></div>
+        <div class="mochi-loading-line"></div>
+      </div>
+    `;
+    
     let screenshot = null;
     
     // Only capture screenshot for dynamic web apps
@@ -713,6 +728,12 @@ function handleStreamingUpdate(update) {
     // Handle streaming text
     if (update.text) {
       logToBackground(`[Mochi-Content] Received streaming update: "${update.text}"`);
+      
+      // If this is the first chunk, clear the loading placeholder
+      if (accumulatedResponse === '') {
+        logToBackground('[Mochi-Content] First chunk received, clearing loading placeholder');
+        outputField.innerHTML = '';
+      }
       
       // Accumulate and render new text
       accumulatedResponse += update.text;
@@ -1037,8 +1058,13 @@ function showError(message) {
  */
 async function loadDynamicAppsModule() {
   try {
-    const { DYNAMIC_APP_PATTERNS } = await import(chrome.runtime.getURL('./dynamic-apps.js'));
-    return DYNAMIC_APP_PATTERNS;
+    // Import module registry
+    const moduleRegistryUrl = chrome.runtime.getURL('module-registry.js');
+    const { getModule } = await import(moduleRegistryUrl);
+    
+    // Load dynamic apps module
+    const dynamicAppsModule = await getModule('dynamic-apps.js');
+    return dynamicAppsModule.DYNAMIC_APP_PATTERNS;
   } catch (error) {
     logToBackground('[Mochi-Content] Error loading dynamic apps module: ' + error.message, true);
     throw error;

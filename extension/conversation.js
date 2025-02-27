@@ -34,7 +34,12 @@ export async function initializeModules() {
   if (initialized) return;
   
   try {
-    const messageTypes = await import(chrome.runtime.getURL('./types/message.js'));
+    // Import module registry
+    const moduleRegistryUrl = chrome.runtime.getURL('module-registry.js');
+    const { getModule } = await import(moduleRegistryUrl);
+    
+    // Load message types
+    const messageTypes = await getModule('types/message.js');
     ({ 
       MessageRole, 
       ContentType,
