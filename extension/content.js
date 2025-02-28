@@ -181,6 +181,11 @@ async function initializeChatInput() {
       // Create container
       const container = document.createElement('div');
       container.id = 'mochi-chat-input-container';
+      
+      // Add click event to toggle chat interface
+      container.addEventListener('click', () => {
+        toggleChatInterface();
+      });
 
       // Create input field
       const input = document.createElement('input');
@@ -257,6 +262,9 @@ async function initializeChatInput() {
       container.appendChild(input);
       container.appendChild(submitButton);
       document.body.appendChild(container);
+      
+      // Create a separate hide button that appears when hovering over the chat toggle
+      createHideButton(container);
     }
   } catch (error) {
     logToBackground('[Mochi-Content] Error initializing chat input: ' + error.message, true);
@@ -265,12 +273,119 @@ async function initializeChatInput() {
 }
 
 /**
+ * Create a separate hide button that appears when hovering over the chat toggle
+ * Positions the button relative to the container but outside its DOM hierarchy
+ * @param {HTMLElement} container - The chat toggle container element
+ */
+function createHideButton(container) {
+  // Remove any existing hide button
+  const existingButton = document.getElementById('mochi-chat-toggle-hide-button');
+  if (existingButton) {
+    existingButton.remove();
+  }
+
+  // Create new hide button
+  const hideButton = document.createElement('button');
+  hideButton.id = 'mochi-chat-toggle-hide-button';
+  hideButton.innerHTML = `
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"></line>
+      <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+  `;
+  hideButton.title = 'Hide chat toggle (use Cmd+K/Ctrl+K to show again)';
+  
+  // Add the button directly to the body, not inside the container
+  document.body.appendChild(hideButton);
+  
+  // Position the button relative to the container
+  const updateButtonPosition = () => {
+    // If container is hidden, hide the button too
+    if (container.classList.contains('mochi-chat-toggle-hidden')) {
+      hideButton.style.display = 'none';
+      return;
+    }
+    
+    const rect = container.getBoundingClientRect();
+    hideButton.style.position = 'fixed';
+    hideButton.style.top = (rect.top - 10) + 'px';
+    hideButton.style.left = (rect.right - 10) + 'px';
+    hideButton.style.display = '';
+  };
+  
+  // Initial positioning
+  updateButtonPosition();
+  
+  // Update position whenever needed
+  const observer = new MutationObserver(updateButtonPosition);
+  observer.observe(container, { attributes: true, attributeFilter: ['class'] });
+  window.addEventListener('resize', updateButtonPosition);
+  document.addEventListener('scroll', updateButtonPosition);
+  
+  // Show the button when hovering over the container
+  container.addEventListener('mouseenter', () => {
+    if (!container.classList.contains('mochi-chat-toggle-hidden')) {
+      hideButton.classList.add('mochi-visible');
+    }
+  });
+  
+  // Hide the button when leaving the container area
+  container.addEventListener('mouseleave', (event) => {
+    // Add a small delay to check if mouse moved to button
+    setTimeout(() => {
+      const buttonRect = hideButton.getBoundingClientRect();
+      const mouseX = event.clientX;
+      const mouseY = event.clientY;
+      
+      // If mouse is over the button, don't hide it
+      if (mouseX >= buttonRect.left && mouseX <= buttonRect.right && 
+          mouseY >= buttonRect.top && mouseY <= buttonRect.bottom) {
+        return;
+      }
+      
+      hideButton.classList.remove('mochi-visible');
+    }, 100);
+  });
+  
+  // Hide button also needs mouse events
+  hideButton.addEventListener('mouseenter', () => {
+    hideButton.classList.add('mochi-visible');
+  });
+  
+  hideButton.addEventListener('mouseleave', () => {
+    hideButton.classList.remove('mochi-visible');
+  });
+  
+  // Add click event to hide the chat toggle
+  hideButton.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    
+    // Direct call to hide function with more forceful approach
+    const chatToggle = document.getElementById('mochi-chat-input-container');
+    if (chatToggle) {
+      chatToggle.classList.add('mochi-chat-toggle-hidden');
+      chatToggle.style.display = 'none';
+      chatToggle.style.visibility = 'hidden';
+      chatToggle.style.opacity = '0';
+      logToBackground('[Mochi-Content] Chat toggle hidden from button');
+    }
+    
+    // Hide the button itself
+    hideButton.style.display = 'none';
+    
+    return false;
+  });
+}
+
+/**
  * Toggle chat interface visibility
  * Used by both click and keyboard shortcuts
- * @returns {Promise<void>}
+ * @returns {void}
  */
 function toggleChatInterface() {
-  logToBackground('Toggling chat');
+  logToBackground('[Mochi-Content] Toggling chat');
   if (!lastResponse) {
     // No previous chat, focus the input field
     const input = document.getElementById('mochi-chat-input-field');
@@ -338,6 +453,45 @@ function hideChatInterface() {
 function toggleExpand() {
   if (chatInterface) {
     chatInterface.classList.toggle('mochi-expanded');
+  }
+}
+
+/**
+ * Hide the chat toggle button
+ * Makes the toggle button invisible until shown again via keyboard shortcut
+ * @returns {void}
+ */
+function hideChatToggle() {
+  const chatToggle = document.getElementById('mochi-chat-input-container');
+  if (chatToggle) {
+    // Use both CSS class and inline style to ensure it's hidden
+    chatToggle.classList.add('mochi-chat-toggle-hidden');
+    chatToggle.style.display = 'none';
+    chatToggle.style.visibility = 'hidden';
+    chatToggle.style.opacity = '0';
+    logToBackground('[Mochi-Content] Chat toggle hidden');
+    
+    // Also hide the hide button if it exists
+    const hideButton = document.getElementById('mochi-chat-toggle-hide-button');
+    if (hideButton) {
+      hideButton.style.display = 'none';
+    }
+  }
+}
+
+/**
+ * Show the chat toggle button if it was hidden
+ * @returns {void}
+ */
+function showChatToggle() {
+  const chatToggle = document.getElementById('mochi-chat-input-container');
+  if (chatToggle) {
+    // Remove both CSS class and inline styles
+    chatToggle.classList.remove('mochi-chat-toggle-hidden');
+    chatToggle.style.display = '';
+    chatToggle.style.visibility = '';
+    chatToggle.style.opacity = '';
+    logToBackground('[Mochi-Content] Chat toggle shown');
   }
 }
 
@@ -1147,6 +1301,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   switch (message.action) {
     case "toggleChat":
+      // First show the chat toggle if it's hidden before toggling the interface
+      showChatToggle();
       toggleChatInterface();
       break;
       
@@ -1341,3 +1497,42 @@ if (document.readyState === 'loading') {
 } else {
   initializeContent();
 }
+
+// Add a debug function to check if elements are properly hidden
+window.mochiDebugHideButton = function() {
+  console.log('[Mochi-Debug] Checking hide button functionality');
+  const chatToggle = document.getElementById('mochi-chat-input-container');
+  const hideButton = document.getElementById('mochi-chat-toggle-hide-button');
+  
+  if (chatToggle) {
+    console.log('[Mochi-Debug] Chat toggle found:', chatToggle);
+    console.log('[Mochi-Debug] Current styles:', {
+      display: window.getComputedStyle(chatToggle).display,
+      visibility: window.getComputedStyle(chatToggle).visibility,
+      opacity: window.getComputedStyle(chatToggle).opacity,
+      zIndex: window.getComputedStyle(chatToggle).zIndex,
+      classes: chatToggle.className
+    });
+    
+    // Force hide with all methods
+    chatToggle.classList.add('mochi-chat-toggle-hidden');
+    chatToggle.style.display = 'none';
+    chatToggle.style.visibility = 'hidden';
+    chatToggle.style.opacity = '0';
+    console.log('[Mochi-Debug] After applying all hide methods:');
+    console.log({
+      display: window.getComputedStyle(chatToggle).display,
+      visibility: window.getComputedStyle(chatToggle).visibility,
+      opacity: window.getComputedStyle(chatToggle).opacity
+    });
+  } else {
+    console.log('[Mochi-Debug] Chat toggle not found!');
+  }
+  
+  if (hideButton) {
+    console.log('[Mochi-Debug] Hide button found:', hideButton);
+    hideButton.style.display = 'none';
+  } else {
+    console.log('[Mochi-Debug] Hide button not found!');
+  }
+};

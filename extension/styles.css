@@ -625,3 +625,42 @@ code {
      transform: translateX(200%);
    }
  }
+
+ /* Hide button for chat toggle */
+#mochi-chat-toggle-hide-button {
+  width: 20px !important;
+  height: 20px !important;
+  background-color: rgba(0, 0, 0, 0.8) !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3) !important;
+  cursor: pointer !important;
+  opacity: 0 !important;
+  transform: scale(0.8) !important;
+  transition: opacity 0.2s ease-out, transform 0.1s ease-out !important;
+  z-index: 2147483648 !important;
+  border: none !important;
+  padding: 0 !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-weight: normal !important;
+  pointer-events: auto !important;
+}
+
+#mochi-chat-toggle-hide-button.mochi-visible {
+  opacity: 1 !important;
+  transform: scale(1) !important;
+}
+
+#mochi-chat-toggle-hide-button:hover {
+  transform: scale(1.1) !important;
+  background-color: rgba(0, 0, 0, 0.9) !important;
+}
+
+/* Hidden state for chat toggle */
+.mochi-chat-toggle-hidden {
+  display: none !important;
+}
