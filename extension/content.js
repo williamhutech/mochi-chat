@@ -1162,6 +1162,137 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 //=============================================================================
+// Print Mode Handling
+//=============================================================================
+
+/**
+ * Handle print mode events to ensure chat interface is hidden during printing
+ * Uses both CSS (media query) and JavaScript event handlers for maximum compatibility
+ * Also handles print preview mode which may not trigger standard print events
+ * @returns {void}
+ */
+function setupPrintModeHandling() {
+  // Store interface visibility state before printing
+  let wasInterfaceVisible = false;
+  let printModeActive = false;
+  
+  /**
+   * Helper function to hide all Mochi elements
+   * @private
+   */
+  const hideAllMochiElements = () => {
+    // Store current state to restore after printing
+    wasInterfaceVisible = isInterfaceVisible;
+    
+    // Hide chat interface if visible
+    if (isInterfaceVisible && chatInterface) {
+      hideChatInterface();
+    }
+    
+    // Hide all Mochi elements using attribute selectors
+    const mochiElements = document.querySelectorAll('[id^="mochi-"], [class^="mochi-"]');
+    mochiElements.forEach(element => {
+      element.classList.add('mochi-print-hidden');
+    });
+    
+    logToBackground('[Mochi-Content] All Mochi elements hidden for print mode');
+  };
+  
+  /**
+   * Helper function to restore all Mochi elements
+   * @private
+   */
+  const restoreAllMochiElements = () => {
+    // Only restore if we're not in actual print mode
+    if (printModeActive) return;
+    
+    // Restore chat interface if it was visible before
+    if (wasInterfaceVisible && chatInterface) {
+      showChatInterface();
+    }
+    
+    // Restore all Mochi elements
+    const mochiElements = document.querySelectorAll('.mochi-print-hidden');
+    mochiElements.forEach(element => {
+      element.classList.remove('mochi-print-hidden');
+    });
+    
+    logToBackground('[Mochi-Content] All Mochi elements restored after print mode');
+  };
+  
+  // Before print: Hide interface if visible
+  window.addEventListener('beforeprint', () => {
+    logToBackground('[Mochi-Content] Print mode detected, hiding chat interface');
+    printModeActive = true;
+    hideAllMochiElements();
+  });
+  
+  // After print: Restore interface if it was visible before
+  window.addEventListener('afterprint', () => {
+    logToBackground('[Mochi-Content] Print mode ended, restoring chat interface');
+    printModeActive = false;
+    restoreAllMochiElements();
+  });
+  
+  // Additional detection for print preview mode
+  // Some browsers don't trigger beforeprint/afterprint for preview
+  document.addEventListener('visibilitychange', () => {
+    // When tab becomes hidden, check if it might be due to print preview
+    if (document.visibilityState === 'hidden') {
+      // We can't be certain it's print preview, but we'll hide the UI just in case
+      hideAllMochiElements();
+      logToBackground('[Mochi-Content] Tab hidden, hiding chat interface (possible print preview)');
+    } else if (document.visibilityState === 'visible' && !printModeActive) {
+      // Only restore if we're not in actual print mode
+      restoreAllMochiElements();
+      logToBackground('[Mochi-Content] Tab visible again, restoring chat interface');
+    }
+  });
+  
+  // Detect print preview via keyboard shortcuts (Cmd+P or Ctrl+P)
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
+      logToBackground('[Mochi-Content] Print shortcut detected, hiding chat interface');
+      hideAllMochiElements();
+      
+      // Set a timeout to check if we need to restore elements
+      // This handles the case where user cancels the print dialog
+      setTimeout(() => {
+        if (!printModeActive && document.visibilityState === 'visible') {
+          restoreAllMochiElements();
+        }
+      }, 1000);
+    }
+  });
+  
+  // Create a MutationObserver to detect print preview dialog
+  // This is a fallback method for browsers that don't trigger other events
+  const bodyObserver = new MutationObserver((mutations) => {
+    // Check if any print-related classes or attributes were added to the body
+    for (const mutation of mutations) {
+      if (mutation.type === 'attributes') {
+        const body = document.body;
+        // Different browsers may add different classes/attributes when printing
+        if (body.classList.contains('print-preview') || 
+            body.hasAttribute('data-print-preview') ||
+            window.matchMedia('print').matches) {
+          hideAllMochiElements();
+          logToBackground('[Mochi-Content] Print preview detected via body mutation');
+        }
+      }
+    }
+  });
+  
+  // Start observing the body for attribute changes
+  bodyObserver.observe(document.body, { 
+    attributes: true,
+    attributeFilter: ['class', 'style', 'data-print-preview']
+  });
+  
+  logToBackground('[Mochi-Content] Print mode handlers initialized');
+}
+
+//=============================================================================
 // Initialization
 //=============================================================================
 
@@ -1178,18 +1309,29 @@ async function initializeContent() {
     await initializeModules();
     
     // Create UI components
-    await createChatInterface();
     await initializeChatInput();
+    await createChatInterface();
+    hideChatInterface();
     
     // Extract page text and initialize conversation
     await extractPageText();
     await checkIfDynamicWebApp();
     
+    // Set up print mode handling
+    setupPrintModeHandling();
+    
+    // Set up keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Alt+M to toggle chat interface
+      if (e.altKey && e.key === 'm') {
+        toggleChatInterface();
+      }
+    });
+    
     initialized = true;
     logToBackground('[Mochi-Content] Content script initialized successfully');
   } catch (error) {
-    logToBackground('[Mochi-Content] Initialization error: ' + error.message, true);
-    showError('Failed to initialize chat interface');
+    logToBackground('[Mochi-Content] Error initializing content script: ' + error.message, true);
   }
 }
 

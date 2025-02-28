@@ -16,6 +16,48 @@
  }
  
  /* -----------------------------------------------------------------------------
+  * Print Mode Handling
+  * Hide chat interface elements when printing
+  * --------------------------------------------------------------------------- */
+@media print {
+  #mochi-chat-input-container,
+  #mochi-chat-interface,
+  #mochi-chat-toggle-button,
+  #mochi-pdf-extractor-ui,
+  .mochi-chat-element,
+  [id^="mochi-"],
+  [class^="mochi-"] {
+    display: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    z-index: -9999 !important;
+    transform: scale(0) !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    clip-path: inset(100%) !important;
+  }
+  
+  /* Force body to show all content except Mochi elements */
+  body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+}
+
+/* Special class applied via JS when print mode is detected */
+.mochi-print-hidden {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  position: absolute !important;
+  z-index: -9999 !important;
+}
+
+ /* -----------------------------------------------------------------------------
   * Chat Input Container (replaces toggle button)
   * --------------------------------------------------------------------------- */
  #mochi-chat-input-container {

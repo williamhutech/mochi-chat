@@ -47,34 +47,58 @@
 %%
 
 sequenceDiagram
+    %% Define all participants upfront for better organization
     participant User
     participant Chrome
     participant Content as Content Script<br/>(content.js)
     participant Background as Background Script<br/>(background.js)
+    participant Extract as Text Extractor
     participant Chat as Chat Module<br/>(chat.js)
     participant Conv as Conversation Manager<br/>(conversation.js)
     participant API as Serverless API<br/>(api/chat.js)
     participant OpenAI as OpenAI Handler<br/>(lib/openai.js)
     participant Gemini as Gemini Handler<br/>(lib/gemini.js)
 
-    %% Initialization
+    %% System Initialization
     rect rgb(240, 240, 240)
-        Note over User,Gemini: Initialization
+        Note over User,Gemini: 1. System Initialization
         User->>Chrome: Open webpage
         Chrome->>Content: Tab updated event
         activate Content
         Content->>Background: Log initialization
         Background-->>Content: Logged
 
-        par Initialize Components
+        %% Parallel initialization processes
+        par UI Initialization
             Content->>Content: initializeChatInput()
             Content->>Content: createChatInterface()
             Content->>Content: hideChatInterface()
-        and Process Page
+        and Content Extraction
             Content->>Content: extractPageText()
+            
+            Note right of Content: Dynamic Website Text Extraction
+            Content->>Extract: extractText(options)
+            activate Extract
+            
+            Extract->>Extract: Phase 1: Initial Extraction
+            Note right of Extract: Extract static content
+            
+            Extract->>Extract: Phase 2: Wait for Dynamic Content
+            Note right of Extract: Use MutationObserver to detect DOM changes
+            
+            Extract->>Extract: Phase 3: Follow-up Extraction
+            Note right of Extract: Capture newly loaded content
+            
+            Extract->>Extract: Phase 4: Final Deduplication
+            Note right of Extract: Process and format extracted text
+            
+            Extract-->>Content: Extracted Text
+            deactivate Extract
+            
             Content->>Content: checkIfDynamicWebApp()
         end
 
+        %% Module Loading
         Content->>Chat: loadChatModule()
         activate Chat
         Chat->>Conv: import
@@ -84,9 +108,9 @@ sequenceDiagram
         deactivate Content
     end
 
-    %% Chat Interaction
+    %% User Interaction and Chat Flow
     rect rgb(240, 240, 240)
-        Note over User,Gemini: Chat Interaction
+        Note over User,Gemini: 2. User Interaction
         User->>Content: Toggle chat interface
         activate Content
         Content->>Content: toggleChatInterface()
@@ -99,11 +123,15 @@ sequenceDiagram
         Content->>Content: showChatInterface()
         Content->>Chat: sendPrompt(prompt)
         activate Chat
+    end
         
-        par Get History and Screenshot
+    %% Request Preparation
+    rect rgb(240, 240, 240)
+        Note over User,Gemini: 3. Request Preparation
+        par Gather Conversation Context
             Chat->>Conv: getHistory()
             Conv-->>Chat: conversation history
-        and
+        and Capture Visual Context
             alt isDynamicWebApp is true
                 Content->>Content: captureScreenWithoutInterface()
                 Content->>Content: enhanceScreenshot()
@@ -113,7 +141,11 @@ sequenceDiagram
 
         Chat->>Chat: generateChatGPTResponse(prompt, screenshot?, config)
         Note over Chat: config: {<br/>provider: "openai" | "gemini",<br/>model: string<br/>}
+    end
 
+    %% API Communication
+    rect rgb(240, 240, 240)
+        Note over User,Gemini: 4. API Communication
         critical Process Request
             Chat->>API: POST /api/chat
             activate API
@@ -143,14 +175,18 @@ sequenceDiagram
             Chat->>Background: Log error
             Background-->>Chat: Logged
         end
+    end
 
+    %% Response Handling
+    rect rgb(240, 240, 240)
+        Note over User,Gemini: 5. Response Handling
         Chat->>Content: handleStreamingUpdate(chunk)
         activate Content
         par UI Updates
             Content->>Content: renderMarkdown()
             Content->>Content: createPageLinks()
             Content->>Content: checkAndExpandContent()
-        and
+        and History Management
             Chat->>Conv: addToHistory(messages)
             Conv-->>Chat: history updated
         end
@@ -163,7 +199,7 @@ sequenceDiagram
 
     %% Error Handling
     rect rgb(240, 240, 240)
-        Note over User,Gemini: Error Handling
+        Note over User,Gemini: 6. Error Handling
         User->>Content: Invalid request
         activate Content
         Content->>Chat: sendPrompt(invalid)

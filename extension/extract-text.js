@@ -8,6 +8,8 @@
  * Key Features:
  * - Website text extraction with semantic content selection
  * - PDF text extraction using PDF.js
+ * - Shadow DOM content extraction
+ * - Dynamic content detection and extraction
  * - Duplicate detection and removal
  * - Error handling and logging
  * - Content type-specific optimizations
@@ -97,26 +99,37 @@ function logToBackground(message, isError = false) {
  * 
  * Process:
  * 1. Content Selection: Select meaningful content using semantic selectors
- * 2. Visibility & Duplicate Prevention: Filter based on visibility,
+ * 2. Shadow DOM traversal: Extract text from Shadow DOM components
+ * 3. Dynamic Content Detection: Multiple passes with delays to capture dynamically loaded content
+ * 4. Visibility & Duplicate Prevention: Filter based on visibility,
  *    track processed nodes, skip exact duplicates or code-like content
- * 3. (Optional) Sentence-Level Deduplication
+ * 5. Sentence-Level Deduplication
  * 
  * @returns {Promise<string>} A single formatted passage of extracted text
  * @throws {Error} If extraction fails
  */
 async function extractFromWebsite() {
   try {
-    logToBackground('[Mochi-Extract] Starting website text extraction');
+    logToBackground('[Mochi-Extract] Starting website text extraction with dynamic content support');
     
     // Track processed nodes and text segments to prevent duplicates
     const processedNodes = new Set();
     const processedTexts = new Set();  
-    const duplicateStats = {
+    
+    // Track extraction statistics
+    const stats = {
       nodeSkipped: 0,
       textDuplicates: 0,
-      totalProcessed: 0
+      totalProcessed: 0,
+      shadowDomNodes: 0,
+      initialContentSize: 0,
+      finalContentSize: 0,
+      dynamicContentGain: 0,
+      iterationCount: 0
     };
-    let extractedText = '';
+    
+    // Combined extracted text from all passes
+    let allExtractedText = '';
 
     // Elements that typically contain meaningful text content
     const CONTENT_SELECTORS = [
@@ -196,7 +209,73 @@ async function extractFromWebsite() {
       '.container',
       '.wrapper',
       '[class*="container"]',
-      '[class*="wrapper"]'
+      '[class*="wrapper"]',
+      
+      // E-commerce specific selectors
+      '.product-description',
+      '.product-details',
+      '.product-overview',
+      '.product-features',
+      '.product-specs',
+      '.product-info',
+      '.item-description',
+      '.item-details',
+      '.product-content',
+      '.product-title',
+      '.product-subtitle',
+      '.product-price',
+      '.product-rating',
+      '.product-review',
+      '.product-summary',
+      '.product-about',
+      '.product-highlights',
+      '.product-specifications',
+      '.listing-description',
+      '.item-properties',
+      '.item-specifics',
+      '.item-attributes',
+      '.benefits-list',
+      '.features-list',
+      '.specifications-list',
+      '.data-sheet',
+      '.tech-specs',
+      
+      // Social/professional network selectors
+      '.feed-shared-update',
+      '.feed-shared-text',
+      '.post-content',
+      '.post-text',
+      '.profile-section',
+      '.profile-summary',
+      '.profile-info',
+      '.bio-container',
+      '.experience-section',
+      '.education-section',
+      '.skills-section',
+      '.recommendation-container',
+      '.endorsement-info',
+      '.timeline-item',
+      '.timeline-content',
+      '.activity-feed',
+      '.user-content',
+      '.user-post',
+      '.status-update',
+      '.comment-content',
+      '.description-container',
+      
+      // Common interactive content areas
+      '[aria-label*="description"]',
+      '[aria-label*="details"]',
+      '[aria-label*="about"]',
+      '[aria-label*="overview"]',
+      '[aria-describedby]',
+      '[data-component*="description"]',
+      '[data-component*="details"]',
+      '[data-component*="text"]',
+      '[data-testid*="description"]',
+      '[data-testid*="details"]',
+      '[data-section*="description"]',
+      '[data-section*="details"]'
     ];
 
     // Elements to exclude from text extraction
@@ -320,7 +399,7 @@ async function extractFromWebsite() {
       let current = node;
       while (current) {
         if (processedNodes.has(current)) {
-          duplicateStats.nodeSkipped++;
+          stats.nodeSkipped++;
           return true;
         }
         current = current.parentElement;
@@ -385,13 +464,13 @@ async function extractFromWebsite() {
      * Check if text segment is unique (exact match) among processed texts
      */
     function isUniqueText(text, element) {
-      duplicateStats.totalProcessed++;
+      stats.totalProcessed++;
 
       const cleaned = cleanTextSegment(text);
       if (!cleaned) return false;
       
       if (processedTexts.has(cleaned)) {
-        duplicateStats.textDuplicates++;
+        stats.textDuplicates++;
         logToBackground(
           `[Mochi-Extract] Skipping duplicate text from ${getNodePath(element)}`
         );
@@ -402,47 +481,179 @@ async function extractFromWebsite() {
       return true;
     }
 
-    // Collect text from each selector
-    for (const selector of CONTENT_SELECTORS) {
+    /**
+     * Extract text from Shadow DOM elements
+     * @param {Element} rootElement - The shadow host element
+     * @returns {string} - Extracted text from shadow DOM
+     */
+    function extractFromShadowDOM(rootElement) {
+      let shadowText = '';
+      
+      // Process a shadow host and its shadow tree
+      function processShadowHost(host) {
+        if (host.shadowRoot) {
+          stats.shadowDomNodes++;
+          logToBackground(`[Mochi-Extract] Processing shadow DOM in: ${getNodePath(host)}`);
+          
+          // Extract text from shadow root using similar criteria as main DOM
+          const shadowContentElements = Array.from(
+            host.shadowRoot.querySelectorAll('p, div, span, h1, h2, h3, h4, h5, h6, li, td, article, section')
+          ).filter(el => isVisible(el) && !shouldExclude(el));
+          
+          for (const element of shadowContentElements) {
+            const text = element.textContent;
+            if (text && text.trim().length > 20 && !containsJsonMarkers(text) && isUniqueText(text, element)) {
+              shadowText += cleanTextSegment(text) + ' ';
+            }
+          }
+          
+          // Process any nested shadow roots
+          const nestedHosts = Array.from(host.shadowRoot.querySelectorAll('*'));
+          for (const nestedHost of nestedHosts) {
+            processShadowHost(nestedHost);
+          }
+        }
+      }
+      
+      processShadowHost(rootElement);
+      return shadowText;
+    }
+
+    /**
+     * Core extraction logic - can be called multiple times
+     * @returns {string} Text extracted in this pass
+     */
+    function performExtraction() {
+      let extractedText = '';
+      stats.iterationCount++;
+      
+      logToBackground(`[Mochi-Extract] Performing extraction pass #${stats.iterationCount}`);
+      
+      // Collect text from each selector
+      for (const selector of CONTENT_SELECTORS) {
+        try {
+          const elements = document.querySelectorAll(selector);
+          if (elements.length > 0) {
+            logToBackground(
+              `[Mochi-Extract] Processing selector: ${selector} (Found ${elements.length} elements)`
+            );
+          }
+          
+          for (const element of elements) {
+            if (!isNodeProcessed(element) && isVisible(element) && !shouldExclude(element)) {
+              const text = element.textContent;
+              // 1) Skip if text is too short
+              // 2) Skip if it contains JSON markers
+              if (
+                text && 
+                text.trim().length > 20 &&
+                !containsJsonMarkers(text) &&
+                isUniqueText(text, element)
+              ) {
+                extractedText += cleanTextSegment(text) + ' ';
+                processedNodes.add(element);
+              }
+              
+              // Check for shadow DOM content
+              if (element.shadowRoot) {
+                const shadowText = extractFromShadowDOM(element);
+                if (shadowText) {
+                  extractedText += shadowText + ' ';
+                }
+              }
+            }
+          }
+        } catch (selectorError) {
+          logToBackground(
+            `[Mochi-Extract] Error processing selector ${selector}: ${selectorError.message}`,
+            true
+          );
+        }
+      }
+      
+      // Process potential shadow DOM hosts that might not match our selectors
       try {
-        const elements = document.querySelectorAll(selector);
-        logToBackground(
-          `[Mochi-Extract] Processing selector: ${selector} (Found ${elements.length} elements)`
+        const potentialShadowHosts = Array.from(document.querySelectorAll('*')).filter(
+          el => el.shadowRoot && !processedNodes.has(el)
         );
         
-        for (const element of elements) {
-          if (!isNodeProcessed(element) && isVisible(element) && !shouldExclude(element)) {
-            const text = element.textContent;
-            // 1) Skip if text is too short
-            // 2) Skip if it contains JSON markers
-            if (
-              text && 
-              text.trim().length > 20 &&
-              !containsJsonMarkers(text) &&
-              isUniqueText(text, element)
-            ) {
-              extractedText += cleanTextSegment(text) + ' ';
-              processedNodes.add(element);
+        if (potentialShadowHosts.length > 0) {
+          logToBackground(`[Mochi-Extract] Found ${potentialShadowHosts.length} additional shadow hosts`);
+          
+          for (const host of potentialShadowHosts) {
+            if (!processedNodes.has(host)) {
+              const shadowText = extractFromShadowDOM(host);
+              if (shadowText) {
+                extractedText += shadowText + ' ';
+                processedNodes.add(host);
+              }
             }
           }
         }
-      } catch (selectorError) {
-        logToBackground(
-          `[Mochi-Extract] Error processing selector ${selector}: ${selectorError.message}`,
-          true
-        );
+      } catch (shadowError) {
+        logToBackground(`[Mochi-Extract] Error processing shadow DOM: ${shadowError.message}`, true);
       }
+      
+      return extractedText.trim();
     }
 
-    // Final trim
-    let finalText = extractedText.trim();
-
+    /**
+     * Wait for network activity to settle and dynamic content to load
+     * @returns {Promise<void>}
+     */
+    async function waitForContentToLoad() {
+      logToBackground('[Mochi-Extract] Waiting for dynamic content to load');
+      
+      // We can't directly observe network activity in content scripts
+      // Use DOM mutations as a proxy for dynamic content loading
+      return new Promise(resolve => {
+        let timer = null;
+        let mutationCount = 0;
+        
+        // Set up mutation observer
+        const observer = new MutationObserver((mutations) => {
+          mutationCount += mutations.length;
+          
+          if (mutationCount % 10 === 0) {
+            logToBackground(`[Mochi-Extract] Detected ${mutationCount} DOM mutations`);
+          }
+          
+          // Clear existing timer
+          if (timer) clearTimeout(timer);
+          
+          // Set new timer - if no mutations for 1s, consider network idle
+          timer = setTimeout(() => {
+            observer.disconnect();
+            logToBackground('[Mochi-Extract] Content appears to be stable, proceeding with extraction');
+            resolve();
+          }, 1000);
+        });
+        
+        // Observe DOM changes
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true,
+          attributes: false,
+          characterData: false
+        });
+        
+        // Fallback timeout - resolve after 3s max wait
+        setTimeout(() => {
+          if (observer) {
+            observer.disconnect();
+            logToBackground('[Mochi-Extract] Maximum wait time reached, proceeding with extraction');
+            resolve();
+          }
+        }, 3000);
+      });
+    }
+    
     /**
      * Optional: Sentence-level dedup
      */
     function deduplicateSentences(text) {
       // Naive sentence split
-      const rawSentences = text.split(/([.?!])\s*/);
+      const rawSentences = text.split(/([.!?])\s*/);
       const sentences = [];
       for (let i = 0; i < rawSentences.length; i += 2) {
         const sentence = (rawSentences[i] || '').trim();
@@ -471,20 +682,59 @@ async function extractFromWebsite() {
       return results.join(' ');
     }
 
-    // Perform optional sentence-level dedup
-    const deduplicatedText = deduplicateSentences(finalText);
-
-    // Log stats
+    // PHASE 1: First extraction - capture initial content
+    allExtractedText = performExtraction();
+    stats.initialContentSize = allExtractedText.length;
+    
+    // PHASE 2: Wait for any dynamic content to load naturally
+    logToBackground('[Mochi-Extract] Waiting for any dynamic content to load naturally');
+    await waitForContentToLoad();
+    
+    // PHASE 3: Second extraction - capture any newly loaded content
+    const additionalText = performExtraction();
+    
+    // Check if we got meaningful new content (at least 10% more or 1000 chars)
+    const newContentThreshold = Math.max(stats.initialContentSize * 0.1, 1000);
+    if (additionalText.length > newContentThreshold) {
+      logToBackground(`[Mochi-Extract] Found significant new content: ${additionalText.length} chars`);
+      
+      // Add to total extracted text
+      allExtractedText += ' ' + additionalText;
+      
+      // One more extraction after a longer delay for any remaining dynamic content
+      logToBackground('[Mochi-Extract] Waiting for additional dynamic content...');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const finalPassText = performExtraction();
+      
+      // Add any final content
+      if (finalPassText.length > 100) {
+        logToBackground(`[Mochi-Extract] Final pass found ${finalPassText.length} additional chars`);
+        allExtractedText += ' ' + finalPassText;
+      }
+    } else {
+      logToBackground('[Mochi-Extract] No significant new content found after waiting');
+    }
+    
+    // PHASE 4: Final deduplication and formatting
+    logToBackground(`[Mochi-Extract] Performing final deduplication on ${allExtractedText.length} chars`);
+    const deduplicatedText = deduplicateSentences(allExtractedText);
+    
+    // Calculate dynamic content statistics
+    stats.finalContentSize = deduplicatedText.length;
+    stats.dynamicContentGain = stats.initialContentSize > 0 ? 
+      ((stats.finalContentSize - stats.initialContentSize) / stats.initialContentSize * 100).toFixed(2) : 0;
+    
+    // Log extraction statistics
     logToBackground(
       `[Mochi-Extract] Extraction Statistics:
-      Total Elements Processed: ${duplicateStats.totalProcessed}
-      Duplicate Nodes Skipped: ${duplicateStats.nodeSkipped}
-      Exact Text Segments Duplicates: ${duplicateStats.textDuplicates}
-      Original Text Length: ${finalText.length} characters
-      Final Text Length: ${deduplicatedText.length} characters
-      Reduction: ${(
-        ((finalText.length - deduplicatedText.length) / finalText.length) * 100
-      ).toFixed(2)}%
+      Total Elements Processed: ${stats.totalProcessed}
+      Duplicate Nodes Skipped: ${stats.nodeSkipped}
+      Exact Text Segments Duplicates: ${stats.textDuplicates}
+      Shadow DOM Nodes Processed: ${stats.shadowDomNodes}
+      Extraction Passes: ${stats.iterationCount}
+      Initial Content Size: ${stats.initialContentSize} characters
+      Final Content Size: ${stats.finalContentSize} characters
+      Content Size Increase: ${stats.dynamicContentGain}%
     `
     );
 
