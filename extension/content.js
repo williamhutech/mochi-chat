@@ -806,15 +806,39 @@ async function sendPrompt(prompt) {
       </div>
     `;
     
-    // Check if text extraction is still in progress and queue prompt if needed
+    // Check if text extraction or dynamic detection is still in progress and queue prompt if needed
     if (conversationModule && conversationModule.queuePromptIfNeeded) {
       const extractionComplete = conversationModule.isTextExtractionComplete?.() ?? true;
-      if (!extractionComplete) {
-        logToBackground('[Mochi-Content] Text extraction in progress, queuing prompt');
+      const dynamicDetectionComplete = window.mochiDynamicDetectionComplete ?? false;
+      const dynamicDetectionInProgress = window.mochiDynamicDetectionInProgress ?? false;
+      
+      if (!extractionComplete || dynamicDetectionInProgress) {
+        logToBackground('[Mochi-Content] Text extraction or dynamic detection in progress, queuing prompt');
+        logToBackground(`[Mochi-Content] Extraction complete: ${extractionComplete}, Dynamic detection in progress: ${dynamicDetectionInProgress}`);
         
         // Wait for extraction to complete before continuing
         await conversationModule.queuePromptIfNeeded();
-        logToBackground('[Mochi-Content] Extraction completed, proceeding with queued prompt');
+        
+        // If dynamic detection was in progress, we need to wait for it too
+        if (dynamicDetectionInProgress) {
+          logToBackground('[Mochi-Content] Waiting for dynamic web app detection to complete');
+          
+          // Wait for dynamic detection to complete with timeout
+          const dynamicDetectionTimeout = 5000; // 5 seconds timeout
+          const startTime = Date.now();
+          
+          while (window.mochiDynamicDetectionInProgress && (Date.now() - startTime < dynamicDetectionTimeout)) {
+            await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms and check again
+          }
+          
+          // If we timed out, assume it's a dynamic web app to be safe
+          if (window.mochiDynamicDetectionInProgress) {
+            logToBackground('[Mochi-Content] Dynamic detection timeout, assuming dynamic web app');
+            isDynamic = true;
+          }
+        }
+        
+        logToBackground('[Mochi-Content] Processing complete, proceeding with queued prompt');
       }
     }
     
@@ -905,7 +929,7 @@ function handleStreamingUpdate(update) {
     
     // Handle streaming text
     if (update.text) {
-      logToBackground(`[Mochi-Content] Received streaming update: "${update.text}"`);
+      logToBackground(`[Mochi-Content] Received streaming update: "${update.text.substring(0, 40)}..."`);
       
       // If this is the first chunk, clear the loading placeholder
       if (accumulatedResponse === '') {
@@ -917,6 +941,23 @@ function handleStreamingUpdate(update) {
       accumulatedResponse += update.text;
       const processedText = renderMarkdown(accumulatedResponse);
       outputField.innerHTML = processedText;
+      
+      // Ensure LaTeX is rendered after updating the outputField
+      if (typeof renderMathInElement !== 'undefined') {
+        try {
+          renderMathInElement(outputField, window.katexOptions || {
+            delimiters: [
+              {left: '$$', right: '$$', display: true},
+              {left: '$', right: '$', display: false},
+              {left: '\\[', right: '\\]', display: true},
+              {left: '\\(', right: '\\)', display: false}
+            ],
+            throwOnError: false
+          });
+        } catch (error) {
+          logToBackground(`[Mochi-Content] KaTeX rendering error during stream: ${error.message}`, true);
+        }
+      }
       
       // Check if we need to auto-expand
       checkAndExpandContent(outputField);
@@ -930,7 +971,25 @@ function handleStreamingUpdate(update) {
         // Process final text with page links
         const finalText = createPageLinks(outputField.innerHTML);
         outputField.innerHTML = finalText;
-        lastResponse = finalText;
+        
+        // Final LaTeX rendering pass
+        if (typeof renderMathInElement !== 'undefined') {
+          try {
+            renderMathInElement(outputField, window.katexOptions || {
+              delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\[', right: '\\]', display: true},
+                {left: '\\(', right: '\\)', display: false}
+              ],
+              throwOnError: false
+            });
+          } catch (error) {
+            logToBackground(`[Mochi-Content] KaTeX rendering error during final update: ${error.message}`, true);
+          }
+        }
+        
+        lastResponse = outputField.innerHTML;
       }
       
       // Check if we need to auto-expand
@@ -948,18 +1007,14 @@ function handleStreamingUpdate(update) {
   }
 }
 
-//=============================================================================
-// UI Utility Functions
-//=============================================================================
-
 /**
  * Initialize KaTeX auto-render with global configuration
  */
 function initializeKaTeX() {
   logToBackground('[Mochi-Content] Initializing KaTeX auto-render');
   
-  if (typeof katex === 'undefined') {
-    logToBackground('[Mochi-Content] Warning: KaTeX not available', true);
+  if (typeof katex === 'undefined' || typeof renderMathInElement === 'undefined') {
+    logToBackground('[Mochi-Content] Warning: KaTeX or auto-render not available', true);
     return;
   }
   
@@ -982,7 +1037,7 @@ function initializeKaTeX() {
     leqno: false
   };
   
-  logToBackground('[Mochi-Content] KaTeX auto-render initialized');
+  logToBackground('[Mochi-Content] KaTeX auto-render initialized with options:', window.katexOptions);
 }
 
 /**
@@ -990,49 +1045,6 @@ function initializeKaTeX() {
  * @param {string} text - Raw markdown text that may contain LaTeX expressions
  * @returns {string} HTML string with rendered markdown and LaTeX
  * 
- * IMPORTANT: LaTeX Rendering Implementation Notes
- * --------------------------------------------
- * 1. Block Preservation Strategy:
- *    - Extract LaTeX blocks BEFORE markdown processing
- *    - Use placeholders to protect LaTeX from markdown
- *    - Restore blocks AFTER markdown, BEFORE KaTeX
- * 
- * 2. LaTeX Block Detection:
- *    - Comprehensive regex catches ALL math formats:
- *      $$...$$     (display math)
- *      $...$       (inline math)
- *      \[...\]     (display math)
- *      \(...\)     (inline math)
- *      \begin{align*}...\end{align*}
- *    - Convert \(...\) to $...$ for better inline math support
- *    - Remove newlines between consecutive \]...\[ blocks
- * 
- * 3. Critical Preprocessing:
- *    - Add spacing in \text{...} commands
- *    - Fix sqrt and fraction formatting
- *    - Handle operator spacing
- *    - Escape special chars in text mode
- *    - Remove extra newlines within math blocks
- *    - Convert inline delimiters for consistency
- * 
- * 4. Common Pitfalls:
- *    - Don't convert between display math styles
- *    - Don't use \mathbin for operators
- *    - Don't over-escape backslashes
- *    - Don't let markdown process LaTeX
- *    - Watch for newlines between consecutive math blocks
- * 
- * 5. Error Handling:
- *    - Always have fallback rendering
- *    - Log blocks for debugging
- *    - Return markdown-only on KaTeX fails
- * 
- * 6. Key Improvements:
- *    - Handles mixed delimiter styles ($$ vs \[ vs \begin{align*})
- *    - Preserves spacing in text mode
- *    - Maintains tight spacing between consecutive equations
- *    - Converts problematic delimiters to more compatible ones
- *    - Properly escapes special characters in text mode
  */
 function renderMarkdown(text) {
   logToBackground('[Mochi-Content] Starting markdown rendering');
@@ -1048,7 +1060,7 @@ function renderMarkdown(text) {
     // Extract and store LaTeX blocks, including align environments and inline math
     text = text.replace(
       // Updated regex for more precise matching
-      /(\$\$[\s\S]*?\$\$|(?<!\$)(?<!\w)\$(?!\s)(?:(?!\$).)*?\$(?!\d)(?!\w)|\\begin\{align\*\}[\s\S]*?\\end\{align\*\}|\\begin\{align\}[\s\S]*?\\end\{align\}|\\\[[\s\S]*?\\\]|\\\([^\)]*?\\\))/g,
+      /(\$\$[\s\S]*?\$\$|(?<!\$)(?<!\w)\$(?!\s)(?:(?!\$).)*?\$(?!\d)(?!\w)|\\begin\{align\*\}[\s\S]*?\\end\{align\*\}|\\begin\{align\}[\s\S]*?\\end\{align\}|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g,
       (match) => {
         // Skip if it looks like a monetary value (e.g. $100, $99.99)
         if (match.match(/^\$\s*\d+(?:\.\d{2})?$/)) {
@@ -1078,6 +1090,9 @@ function renderMarkdown(text) {
           processedMatch = '$' + processedMatch.slice(2, -2) + '$';
         }
         
+        // Debug log the processed LaTeX block
+        logToBackground(`[Mochi-Content] Processing LaTeX block: ${processedMatch.substring(0, 40)}...`);
+        
         blocks.push(processedMatch);
         return placeholder;
       });
@@ -1104,17 +1119,35 @@ function renderMarkdown(text) {
     container.innerHTML = html;
     
     if (typeof renderMathInElement === 'undefined') {
-      throw new Error('KaTeX auto-render not available');
+      logToBackground('[Mochi-Content] KaTeX auto-render not available, initializing...', true);
+      initializeKaTeX();
+      if (typeof renderMathInElement === 'undefined') {
+        throw new Error('KaTeX auto-render not available after initialization attempt');
+      }
     }
     
-    renderMathInElement(container, window.katexOptions || {});
+    try {
+      renderMathInElement(container, window.katexOptions || {
+        delimiters: [
+          {left: '$$', right: '$$', display: true},
+          {left: '$', right: '$', display: false},
+          {left: '\\[', right: '\\]', display: true},
+          {left: '\\(', right: '\\)', display: false}
+        ],
+        throwOnError: false
+      });
+    } catch (katexError) {
+      logToBackground(`[Mochi-Content] KaTeX rendering error: ${katexError.message}`, true);
+      // If KaTeX fails, just return the HTML with unreplaced LaTeX
+    }
+    
     html = container.innerHTML;
     
     logToBackground('[Mochi-Content] Rendering complete');
     return html;
     
   } catch (err) {
-    logToBackground(`[Mochi-Content] Error: ${err.message}`, true);
+    logToBackground(`[Mochi-Content] Error in renderMarkdown: ${err.message}`, true);
     return marked.parse(text);
   }
 }
@@ -1230,78 +1263,542 @@ function showError(message) {
 //=============================================================================
 
 /**
- * Load dynamic app patterns from the configuration file
- * @returns {Promise<Array>} Array of dynamic app patterns
- * @throws {Error} If module loading fails
- */
-async function loadDynamicAppsModule() {
-  try {
-    // Import module registry
-    const moduleRegistryUrl = chrome.runtime.getURL('module-registry.js');
-    const { getModule } = await import(moduleRegistryUrl);
-    
-    // Load dynamic apps module
-    const dynamicAppsModule = await getModule('dynamic-apps.js');
-    return dynamicAppsModule.DYNAMIC_APP_PATTERNS;
-  } catch (error) {
-    logToBackground('[Mochi-Content] Error loading dynamic apps module: ' + error.message, true);
-    throw error;
-  }
-}
-
-/**
  * Check if the current webpage is a dynamic web application
+ * Uses heuristics and content analysis to determine if text extraction is sufficient
  * This affects how we handle text extraction and API requests
  * Also updates the AI provider and model based on the result
  * @returns {Promise<boolean>} True if current page is a dynamic web app
  */
 async function checkIfDynamicWebApp() {
   try {
-    const DYNAMIC_APP_PATTERNS = await loadDynamicAppsModule();
-    const currentUrl = window.location.href;
-    const currentDomain = window.location.hostname;
+    logToBackground('[Mochi-Content] Checking if page is a dynamic web application...');
     
-    logToBackground('[Mochi-Content] Checking if dynamic web app...');
-    logToBackground(`[Mochi-Content] Current domain: ${currentDomain}`);
+    // Set a flag to track if dynamic detection is in progress
+    window.mochiDynamicDetectionInProgress = true;
     
-    // Check if current site matches any pattern
-    const isMatch = DYNAMIC_APP_PATTERNS.some(pattern => {
-      const domainMatch = currentDomain.includes(pattern.domain);
-      logToBackground(`[Mochi-Content] Checking domain ${pattern.domain}: ${domainMatch}`);
-      
-      if (!domainMatch) {
-        return false;
-      }
-      
-      if (pattern.paths) {
-        const pathMatch = pattern.paths.some(path => currentUrl.includes(path));
-        logToBackground(`[Mochi-Content] Checking paths for ${pattern.domain}: ${pathMatch}`);
-        return pathMatch;
-      }
-      return true;
-    });
+    // First check for article content
+    const isArticle = await detectArticleContent();
     
-    // Update global isDynamic flag
-    isDynamic = isMatch;
-    
-    // Update provider and model based on web app detection
-    if (isDynamic) {
-      currentProvider = AI_PROVIDERS.OPENAI;
-      currentModel = AI_MODELS[AI_PROVIDERS.OPENAI].webApp;
-      logToBackground('[Mochi-Content] Dynamic web app detected, using gpt-4o model');
-    } else {
-      currentProvider = AI_PROVIDERS.OPENAI;
-      currentModel = AI_MODELS[AI_PROVIDERS.OPENAI].default;
-      logToBackground('[Mochi-Content] Standard web page, using gpt-4o-mini model');
+    if (isArticle) {
+      logToBackground('[Mochi-Content] Page detected as an article, not a dynamic web app');
+      isDynamic = false;
+      updateModelBasedOnDynamicDetection(false);
+      window.mochiDynamicDetectionInProgress = false;
+      window.mochiDynamicDetectionComplete = true;
+      return false;
     }
     
-    logToBackground(`[Mochi-Content] Dynamic web app check result: ${isDynamic}`);
-    return isDynamic;
+    // Check for dynamic content loading characteristics
+    const hasDynamicLoading = await checkForDynamicLoading();
     
+    // Check for infinite scrolling behavior
+    const hasInfiniteScroll = checkForInfiniteScrolling();
+    
+    // Check for rich JS interfaces that make text extraction difficult
+    const hasRichJSInterface = checkForRichJSInterface();
+    
+    // Analyze DOM complexity and interactivity
+    const domComplexity = analyzeDomComplexity();
+    
+    // Assess quality of extractable text content
+    const contentQuality = await assessContentQuality();
+    
+    // Check for JS frameworks
+    const hasFramework = detectJSFrameworks();
+    
+    // Combined score approach - weight each factor appropriately
+    const dynamicLoadingWeight = 0.4;  // Increased from 0.35
+    const infiniteScrollWeight = 0.1;
+    const richJSInterfaceWeight = 0.35; // Increased from 0.3
+    const domComplexityWeight = 0.2;   // Increased from 0.15
+    const contentQualityWeight = 0.05; // Reduced from 0.1
+    const frameworkWeight = 0.2;      // New factor
+    
+    // Calculate weighted score
+    const dynamicScore = 
+      (hasDynamicLoading ? dynamicLoadingWeight : 0) +
+      (hasInfiniteScroll ? infiniteScrollWeight : 0) +
+      (hasRichJSInterface ? richJSInterfaceWeight : 0) +
+      (domComplexity > 0.6 ? domComplexityWeight : 0) +
+      (contentQuality < 0.5 ? contentQualityWeight : 0) +
+      (hasFramework ? frameworkWeight : 0);
+    
+    // Dynamic score threshold is now lower to catch more web apps
+    const shouldUseImageCapture = dynamicScore >= 0.35;
+    
+    logToBackground(`[Mochi-Content] Dynamic detection results:
+      - Article content: ${isArticle}
+      - Dynamic loading: ${hasDynamicLoading} (weight: ${dynamicLoadingWeight})
+      - Infinite scroll: ${hasInfiniteScroll} (weight: ${infiniteScrollWeight})
+      - Rich JS interface: ${hasRichJSInterface} (weight: ${richJSInterfaceWeight})
+      - DOM complexity: ${domComplexity} (weight: ${domComplexityWeight})
+      - Content quality: ${contentQuality} (weight: ${contentQualityWeight})
+      - JS Framework: ${hasFramework} (weight: ${frameworkWeight})
+      - Dynamic score: ${dynamicScore.toFixed(2)}
+      - Required threshold: 0.35
+      - Final decision: ${shouldUseImageCapture}`);
+    
+    // Update global isDynamic flag based on detection
+    isDynamic = shouldUseImageCapture;
+    
+    // Update AI provider and model based on detection result
+    updateModelBasedOnDynamicDetection(shouldUseImageCapture);
+    
+    // Mark detection as complete
+    window.mochiDynamicDetectionInProgress = false;
+    window.mochiDynamicDetectionComplete = true;
+    
+    logToBackground(`[Mochi-Content] Dynamic web app detection complete: ${isDynamic ? 'Yes' : 'No'}`);
+    return isDynamic;
   } catch (error) {
-    logToBackground('[Mochi-Content] Error checking dynamic web app status: ' + error.message, true);
+    logToBackground('[Mochi-Content] Error detecting dynamic web app: ' + error.message, true);
     isDynamic = false;
+    updateModelBasedOnDynamicDetection(false);
+    window.mochiDynamicDetectionInProgress = false;
+    window.mochiDynamicDetectionComplete = true;
     return false;
+  }
+}
+
+/**
+ * Updates the AI provider and model based on dynamic web app detection
+ * Extracted to a separate function for better maintainability
+ * @param {boolean} isDynamicApp - Whether the current page is a dynamic web app
+ */
+function updateModelBasedOnDynamicDetection(isDynamicApp) {
+  if (isDynamicApp) {
+    currentProvider = AI_PROVIDERS.OPENAI;
+    currentModel = AI_MODELS[AI_PROVIDERS.OPENAI].webApp;
+    logToBackground('[Mochi-Content] Dynamic web app detected, using gpt-4o model');
+  } else {
+    currentProvider = AI_PROVIDERS.OPENAI;
+    currentModel = AI_MODELS[AI_PROVIDERS.OPENAI].default;
+    logToBackground('[Mochi-Content] Standard web page, using gpt-4o-mini model');
+  }
+}
+
+// Thresholds for detection
+const DOM_COMPLEXITY_THRESHOLD = 0.6; // Lowered from 0.7 to catch more complex UIs
+const CONTENT_QUALITY_THRESHOLD = 0.5;
+const MIN_TEXT_LENGTH = 500; // Characters
+const MIN_CONTENT_ELEMENTS = 5; // Number of content elements
+const AJAX_REQUEST_THRESHOLD = 10; // Lowered from 15
+const ARTICLE_SCORE_THRESHOLD = 0.6;
+const DYNAMIC_SCORE_THRESHOLD = 0.35; // Lowered to catch more dynamic apps
+
+/**
+ * Detects if the current page is likely an article or blog post
+ * Article pages typically have good text extraction and don't need screenshots
+ * @returns {Promise<boolean>} True if the page is likely an article
+ */
+async function detectArticleContent() {
+  try {
+    // Check for common article structural elements
+    const hasArticleTag = document.querySelector('article') !== null;
+    const hasHeadingStructure = document.querySelectorAll('h1, h2, h3').length >= 2;
+    const hasParagraphs = document.querySelectorAll('p').length >= 5;
+    
+    // Check for schema.org article metadata
+    const hasArticleSchema = 
+      document.querySelector('[itemtype*="Article"]') !== null ||
+      document.querySelector('meta[property="og:type"][content*="article"]') !== null;
+    
+    // Check for common article containers/selectors
+    const hasArticleContainer = 
+      document.querySelector('.article, .post, .entry, .blog-post, .story, #article, #post, [class*="article-"], [class*="post-"]') !== null;
+    
+    // Check for publication date - common in articles
+    const hasPublicationDate = 
+      document.querySelector('time, [datetime], .date, .published, [itemprop="datePublished"]') !== null;
+    
+    // Check for author information - common in articles
+    const hasAuthorInfo = 
+      document.querySelector('[rel="author"], .author, .byline, [itemprop="author"]') !== null;
+    
+    // Check for article-specific features
+    const hasShareButtons = 
+      document.querySelector('.share, .social, [class*="share-"], [class*="social-"]') !== null;
+    
+    // Check for related articles or article navigation
+    const hasArticleNavigation = 
+      document.querySelector('.related, .recommended, .read-more, .next-article, .prev-article') !== null;
+    
+    // Check for reader comments section
+    const hasCommentSection = 
+      document.querySelector('.comments, #comments, .discussion, [class*="comment-"]') !== null;
+    
+    // Check content structure and length
+    const extractModule = await initializeExtractModule();
+    const extractionOptions = {
+      type: extractModule.CONTENT_TYPES.WEBSITE
+    };
+    
+    const extractedText = await extractModule.extractText(extractionOptions);
+    const hasSubstantialText = extractedText && extractedText.length > 1500;
+    
+    // Check paragraph-to-heading ratio (articles typically have multiple paragraphs per heading)
+    const paragraphCount = document.querySelectorAll('p').length;
+    const headingCount = document.querySelectorAll('h1, h2, h3, h4, h5, h6').length;
+    const goodParagraphHeadingRatio = headingCount > 0 && paragraphCount / headingCount > 3;
+    
+    // Check for presence of "comments" or "read more" text
+    const hasArticleLanguage = 
+      document.body.innerText.match(/comments|read more|related articles|share this|posted on|published|author/i) !== null;
+    
+    // Calculate weighted article score
+    const factors = [
+      { value: hasArticleTag, weight: 0.15 },
+      { value: hasHeadingStructure, weight: 0.1 },
+      { value: hasParagraphs, weight: 0.15 },
+      { value: hasArticleSchema, weight: 0.2 },
+      { value: hasArticleContainer, weight: 0.1 },
+      { value: hasPublicationDate, weight: 0.05 },
+      { value: hasAuthorInfo, weight: 0.05 },
+      { value: hasShareButtons, weight: 0.02 },
+      { value: hasArticleNavigation, weight: 0.03 },
+      { value: hasCommentSection, weight: 0.05 },
+      { value: hasSubstantialText, weight: 0.15 },
+      { value: goodParagraphHeadingRatio, weight: 0.1 },
+      { value: hasArticleLanguage, weight: 0.05 }
+    ];
+    
+    const articleScore = factors.reduce((score, factor) => {
+      return score + (factor.value ? factor.weight : 0);
+    }, 0);
+    
+    const isArticle = articleScore >= ARTICLE_SCORE_THRESHOLD;
+    
+    logToBackground(`[Mochi-Content] Article detection:
+      - Article tag: ${hasArticleTag}
+      - Heading structure: ${hasHeadingStructure}
+      - Paragraphs: ${hasParagraphs}
+      - Article schema: ${hasArticleSchema}
+      - Article container: ${hasArticleContainer}
+      - Publication date: ${hasPublicationDate}
+      - Author info: ${hasAuthorInfo}
+      - Share buttons: ${hasShareButtons}
+      - Article navigation: ${hasArticleNavigation}
+      - Comment section: ${hasCommentSection}
+      - Substantial text: ${hasSubstantialText}
+      - Paragraph-heading ratio: ${goodParagraphHeadingRatio}
+      - Article language: ${hasArticleLanguage}
+      - Article score: ${articleScore.toFixed(2)}
+      - Threshold: ${ARTICLE_SCORE_THRESHOLD}
+      - Is article: ${isArticle}`);
+    
+    return isArticle;
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error detecting article content: ' + error.message, true);
+    return false;
+  }
+}
+
+/**
+ * Checks for dynamic content loading through AJAX, WebSockets, or other real-time methods
+ * @returns {Promise<boolean>} True if dynamic content loading is detected
+ */
+async function checkForDynamicLoading() {
+  try {
+    // Count AJAX requests
+    const ajaxCount = await countAjaxRequests();
+    
+    // Check for WebSocket connections
+    const hasWebSockets = Array.from(document.querySelectorAll('script')).some(script => 
+      script.textContent && (
+        script.textContent.includes('new WebSocket') ||
+        script.textContent.includes('WebSocket(')
+      )
+    );
+    
+    // Check for EventSource (Server-Sent Events)
+    const hasEventSource = Array.from(document.querySelectorAll('script')).some(script => 
+      script.textContent && (
+        script.textContent.includes('new EventSource') ||
+        script.textContent.includes('EventSource(')
+      )
+    );
+    
+    // Check for real-time update patterns
+    const scriptContent = Array.from(document.querySelectorAll('script'))
+      .map(script => script.textContent || '')
+      .join(' ');
+    
+    const realTimePatterns = (scriptContent.match(
+      /setInterval|setTimeout|requestAnimationFrame/g
+    ) || []).length > 15;
+    
+    // Check for fetch API usage
+    const hasFetchAPI = scriptContent.includes('fetch(');
+    
+    // Check for mutation observers
+    const hasMutationObserver = scriptContent.includes('MutationObserver');
+    
+    // Check for dynamic DOM updates
+    const hasDocumentCreateElement = (scriptContent.match(/document\.createElement/g) || []).length > 10;
+    
+    return ajaxCount > AJAX_REQUEST_THRESHOLD || 
+           hasWebSockets || 
+           hasEventSource || 
+           realTimePatterns ||
+           (hasFetchAPI && hasMutationObserver) ||
+           hasDocumentCreateElement;
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error checking dynamic loading: ' + error.message, true);
+    return false;
+  }
+}
+
+/**
+ * Checks for infinite scrolling behavior
+ * @returns {boolean} True if infinite scrolling is detected
+ */
+function checkForInfiniteScrolling() {
+  try {
+    // Check common indicator elements used by infinite scroll libraries
+    const infiniteScrollIndicators = [
+      '.infinite-scroll',
+      '.infinite-scroll-component',
+      '.load-more',
+      '.loading-spinner',
+      '[aria-label*="loading more"]',
+      '[data-testid*="infinite"]',
+      '[data-testid*="scroll"]',
+      '[class*="infinite"]',
+      '[class*="scroll-sentinel"]',
+      '[id*="infinite"]'
+    ];
+    
+    const hasIndicators = infiniteScrollIndicators.some(selector => {
+      return document.querySelector(selector) !== null;
+    });
+    
+    // Check for scroll event listeners that may indicate infinite scrolling
+    const hasScrollListeners = document.addEventListener.toString().includes('scroll');
+    
+    // Check for very tall containers with overflow (common in infinite scroll)
+    const tallContainers = Array.from(document.querySelectorAll('div, main, section'))
+      .filter(el => {
+        const style = window.getComputedStyle(el);
+        return el.scrollHeight > window.innerHeight * 3 && 
+               (style.overflow === 'auto' || style.overflow === 'scroll' || 
+                style.overflowY === 'auto' || style.overflowY === 'scroll');
+      });
+    
+    const hasTallContainers = tallContainers.length > 0;
+    
+    logToBackground(`[Mochi-Content] Infinite scroll detection:
+      - Scroll indicators: ${hasIndicators}
+      - Scroll listeners: ${hasScrollListeners}
+      - Tall containers: ${hasTallContainers}`);
+    
+    return hasIndicators || (hasScrollListeners && hasTallContainers);
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error checking for infinite scrolling: ' + error.message, true);
+    return false;
+  }
+}
+
+/**
+ * Checks for rich JavaScript interfaces that make text extraction difficult
+ * @returns {boolean} True if rich JS interface is detected
+ */
+function checkForRichJSInterface() {
+  try {
+    // Check for JS frameworks
+    const hasFramework = detectJSFrameworks();
+    
+    // Check for email client patterns (like Outlook)
+    const hasEmailClientPatterns = [
+      'div[role="grid"]',          // Email list grid
+      'div[aria-label="Command Bar"]', // Outlook's command bar
+      'div[data-app-section="NavigationPane"]', // Navigation pane
+      '.ms-Fabric',                // Microsoft Fabric UI
+      '[data-automation-id="CanvasZone"]' // SharePoint/Office patterns
+    ].some(selector => document.querySelector(selector) !== null);
+    
+    // Check for complex UI patterns
+    const hasComplexUI = 
+      document.querySelectorAll('[role="menu"], [role="dialog"], [role="tooltip"], [role="tablist"]').length > 2 ||
+      document.querySelectorAll('[draggable="true"]').length > 0;
+    
+    // Check for rich text editors
+    const hasRichEditor = document.querySelector('[contenteditable="true"]') !== null;
+    
+    // Check for canvas elements (often used in complex web apps)
+    const hasCanvas = document.querySelectorAll('canvas').length > 0;
+    
+    // Check for custom elements (Web Components)
+    const hasCustomElements = Array.from(document.querySelectorAll('*'))
+      .some(el => el.tagName && el.tagName.includes('-'));
+    
+    // Check for shadow DOM (advanced web component usage)
+    const hasShadowDOM = Array.from(document.querySelectorAll('*'))
+      .some(el => el.shadowRoot);
+    
+    // Check for heavy event listener usage
+    const hasEventListeners = document.querySelectorAll('[onclick], [onchange], [onkeyup], [onkeydown], [onmouseover]').length > 10;
+    
+    return hasFramework || 
+           hasEmailClientPatterns || 
+           hasComplexUI || 
+           hasRichEditor || 
+           hasCanvas || 
+           hasCustomElements || 
+           hasShadowDOM ||
+           hasEventListeners;
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error checking rich JS interface: ' + error.message, true);
+    return false;
+  }
+}
+
+/**
+ * Analyzes DOM complexity and interactivity
+ * @returns {number} Complexity score between 0 and 1
+ */
+function analyzeDomComplexity() {
+  try {
+    // Count total DOM nodes
+    const totalNodes = document.getElementsByTagName('*').length;
+    
+    // Calculate maximum DOM depth
+    const depth = calculateMaxDepth(document.documentElement);
+    
+    // Count interactive elements
+    const interactiveElements = document.querySelectorAll(
+      'button, [role="button"], input, select, textarea, [tabindex], a, [onclick], [contenteditable]'
+    ).length;
+    
+    // Count form elements
+    const formElements = document.querySelectorAll('form, input, select, textarea, button').length;
+    
+    // Component density score
+    const componentDensity = interactiveElements / (totalNodes || 1);
+    
+    // Style complexity
+    const inlineStyles = document.querySelectorAll('[style]').length;
+    const styleSheets = document.styleSheets.length;
+    
+    // Check for complex layouts
+    const hasGrid = document.querySelectorAll('[style*="grid"], [class*="grid"]').length > 0;
+    const hasFlex = document.querySelectorAll('[style*="flex"], [class*="flex"]').length > 0;
+    
+    // Check for iframes
+    const hasIframes = document.querySelectorAll('iframe').length > 0;
+    
+    // Composite score calculation (normalized to 0-1)
+    const complexityScore = Math.min(
+      (totalNodes / 3000) * 0.25 +
+      (depth / 15) * 0.15 +
+      (interactiveElements / 50) * 0.2 +
+      (formElements / 20) * 0.1 +
+      (componentDensity * 10) * 0.1 +
+      (inlineStyles / 30) * 0.05 +
+      (styleSheets / 5) * 0.05 +
+      (hasGrid ? 0.05 : 0) +
+      (hasFlex ? 0.03 : 0) +
+      (hasIframes ? 0.02 : 0),
+      1
+    );
+    
+    return complexityScore;
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error analyzing DOM complexity: ' + error.message, true);
+    return 0;
+  }
+}
+
+/**
+ * Calculates the maximum depth of a DOM element
+ * @param {Element} element - The DOM element to analyze
+ * @param {number} currentDepth - The current depth in the recursion
+ * @returns {number} The maximum depth of the element
+ */
+function calculateMaxDepth(element, currentDepth = 0) {
+  if (!element || !element.children) {
+    return currentDepth;
+  }
+  
+  let maxChildDepth = currentDepth;
+  
+  for (let i = 0; i < element.children.length; i++) {
+    const childDepth = calculateMaxDepth(element.children[i], currentDepth + 1);
+    maxChildDepth = Math.max(maxChildDepth, childDepth);
+  }
+  
+  return maxChildDepth;
+}
+
+/**
+ * Assesses the quality of extractable text content
+ * @returns {Promise<number>} Quality score between 0 and 1 (higher is better)
+ */
+async function assessContentQuality() {
+  try {
+    // Initialize extract module
+    const extractModule = await initializeExtractModule();
+    const extractionOptions = {
+      type: extractModule.CONTENT_TYPES.WEBSITE
+    };
+    
+    // Extract text content
+    const extractedText = await extractModule.extractText(extractionOptions);
+    
+    if (!extractedText || extractedText.length < MIN_TEXT_LENGTH) {
+      return 0; // Poor quality if very little text is extracted
+    }
+    
+    // Count content elements
+    const paragraphs = document.querySelectorAll('p').length;
+    const headings = document.querySelectorAll('h1, h2, h3, h4, h5, h6').length;
+    const lists = document.querySelectorAll('ul, ol').length;
+    const contentElements = paragraphs + headings + lists;
+    
+    if (contentElements < MIN_CONTENT_ELEMENTS) {
+      return 0.3; // Poor quality if few content elements
+    }
+    
+    // Check text-to-code ratio
+    const htmlSize = document.documentElement.outerHTML.length;
+    const textRatio = extractedText.length / htmlSize;
+    
+    // Check for text formatting
+    const hasFormatting = document.querySelectorAll('strong, em, b, i, u, mark, code, pre').length > 0;
+    
+    // Check for semantic structure
+    const hasSemanticStructure = 
+      document.querySelectorAll('article, section, header, footer, nav, aside, main').length > 0;
+    
+    // Check for data tables
+    const hasTables = document.querySelectorAll('table').length > 0;
+    
+    // Composite quality score
+    const qualityScore = 
+      (Math.min(extractedText.length / 2000, 1) * 0.3) + // Text length (up to 2000 chars)
+      (Math.min(contentElements / 20, 1) * 0.2) + // Content elements (up to 20)
+      (Math.min(textRatio * 10, 1) * 0.2) + // Text-to-code ratio
+      (hasFormatting ? 0.1 : 0) + // Text formatting
+      (hasSemanticStructure ? 0.1 : 0) + // Semantic structure
+      (hasTables ? 0.1 : 0); // Data tables
+    
+    return qualityScore;
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error assessing content quality: ' + error.message, true);
+    return 0.5; // Default to middle quality on error
+  }
+}
+
+/**
+ * Initialize the text extraction module
+ * @returns {Object} Extract module with necessary functions
+ */
+async function initializeExtractModule() {
+  try {
+    const extractModuleUrl = chrome.runtime.getURL('extract-text.js');
+    return await import(extractModuleUrl);
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error initializing extract module: ' + error.message, true);
+    throw error;
   }
 }
 
@@ -1488,14 +1985,20 @@ async function initializeContent() {
     // Initialize all required modules first
     await initializeModules();
     
+    // Initialize KaTeX options
+    initializeKaTeX();
+    
     // Create UI components
     await initializeChatInput();
     await createChatInterface();
     hideChatInterface();
     
-    // Extract page text and initialize conversation
-    await extractPageText();
-    await checkIfDynamicWebApp();
+    // Extract page text and check for dynamic web app in parallel
+    const extractionPromise = extractPageText();
+    const dynamicCheckPromise = checkIfDynamicWebApp();
+    
+    // Wait for both to complete
+    await Promise.all([extractionPromise, dynamicCheckPromise]);
     
     // Set up print mode handling
     setupPrintModeHandling();
@@ -1560,3 +2063,102 @@ window.mochiDebugHideButton = function() {
     console.log('[Mochi-Debug] Hide button not found!');
   }
 };
+
+/**
+ * Detects if modern JavaScript frameworks are in use
+ * @returns {boolean} True if a JS framework is detected
+ */
+function detectJSFrameworks() {
+  try {
+    // Check for React
+    const hasReact = 
+      !!document.querySelector('[data-reactroot], [data-reactid], [data-react-checksum]') ||
+      !!window.__REACT_DEVTOOLS_GLOBAL_HOOK__ ||
+      Array.from(document.querySelectorAll('*')).some(el => 
+        Object.keys(el).some(key => key.startsWith('__react'))
+      );
+    
+    // Check for Angular
+    const hasAngular = 
+      !!document.querySelector('[ng-version], [ng-app], [data-ng-app], .ng-binding, .ng-scope') ||
+      typeof window.angular !== 'undefined' ||
+      !!document.querySelector('app-root');
+    
+    // Check for Vue
+    const hasVue = 
+      !!document.querySelector('[data-v-], [v-cloak], [v-html]') ||
+      typeof window.__VUE__ !== 'undefined' ||
+      Array.from(document.querySelectorAll('*')).some(el => 
+        el.__vue__ || (el.__vue_app__ && el.__vue_app__._context)
+      );
+    
+    // Check for Ember
+    const hasEmber = 
+      typeof window.Ember !== 'undefined' ||
+      document.querySelector('[data-ember-action]') !== null;
+    
+    // Check for jQuery
+    const hasJQuery = 
+      typeof window.jQuery !== 'undefined' || 
+      typeof window.$ !== 'undefined';
+    
+    // Check for Microsoft's Fluent UI (used in Outlook)
+    const hasFluentUI = 
+      !!document.querySelector('.ms-Fabric, .ms-Button, .ms-TextField, .ms-Dialog, .ms-Panel') ||
+      !!document.querySelector('[class*="ms-"]');
+    
+    // Check for Google's Material Design
+    const hasMaterialDesign = 
+      !!document.querySelector('.mdc-button, .mat-button, .material-icons') ||
+      !!document.querySelector('[class*="mat-"]');
+    
+    return hasReact || hasAngular || hasVue || hasEmber || (hasJQuery && hasFluentUI) || hasMaterialDesign;
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error detecting JS frameworks: ' + error.message, true);
+    return false;
+  }
+}
+
+/**
+ * Counts the number of AJAX requests made by the page
+ * @returns {Promise<number>} The number of AJAX requests
+ */
+async function countAjaxRequests() {
+  try {
+    // Initialize a counter for AJAX requests
+    let ajaxCount = 0;
+    
+    // Create a proxy for the XMLHttpRequest object
+    const originalXMLHttpRequest = window.XMLHttpRequest;
+    window.XMLHttpRequest = function() {
+      const xhr = new originalXMLHttpRequest();
+      
+      // Override the send method to count AJAX requests
+      xhr.send = function() {
+        ajaxCount++;
+        return originalXMLHttpRequest.prototype.send.apply(xhr, arguments);
+      };
+      
+      return xhr;
+    };
+    
+    // Create a proxy for the fetch API
+    const originalFetch = window.fetch;
+    window.fetch = function() {
+      ajaxCount++;
+      return originalFetch.apply(window, arguments);
+    };
+    
+    // Wait for a short period to allow AJAX requests to complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Restore the original XMLHttpRequest and fetch implementations
+    window.XMLHttpRequest = originalXMLHttpRequest;
+    window.fetch = originalFetch;
+    
+    return ajaxCount;
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error counting AJAX requests: ' + error.message, true);
+    return 0;
+  }
+}

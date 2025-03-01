@@ -99,7 +99,28 @@ sequenceDiagram
             Content->>Conv: addExtractedText(text)
             Conv->>Conv: setExtractionComplete(true)
             
+            Note over Content: Dynamic Web App Detection
             Content->>Content: checkIfDynamicWebApp()
+            Content->>Content: detectArticleContent()
+            Note right of Content: Article detection using:<br/>1. Document structure<br/>2. Schema.org metadata<br/>3. Content patterns<br/>4. Text quality assessment
+            
+            alt Not an Article
+                Content->>Content: checkForDynamicLoading()
+                Note right of Content: Detects AJAX, WebSockets,<br/>EventSource, and real-time updates
+                
+                Content->>Content: checkForInfiniteScrolling()
+                Content->>Content: checkForRichJSInterface()
+                Note right of Content: Detects UI frameworks,<br/>complex UI patterns, and<br/>email client interfaces
+                
+                Content->>Content: detectJSFrameworks()
+                Note right of Content: Identifies React, Angular,<br/>Vue, Ember, and UI libraries
+                
+                Content->>Content: analyzeDomComplexity()
+                Note right of Content: Evaluates DOM structure,<br/>interactive elements, and<br/>layout complexity
+                
+                Content->>Content: assessContentQuality()
+                Note right of Content: Weighted scoring system<br/>with optimized thresholds
+            end
         end
 
         %% Module Loading
@@ -146,10 +167,11 @@ sequenceDiagram
             Chat->>Conv: getHistory()
             Conv-->>Chat: conversation history
         and Capture Visual Context
-            alt isDynamicWebApp is true
+            alt Heuristic detection determines isDynamicWebApp
                 Content->>Content: captureScreenWithoutInterface()
                 Content->>Content: enhanceScreenshot()
                 Content-->>Chat: screenshot data
+                Note right of Content: Visual context captured for dynamic apps<br/>based on heuristic analysis results
             end
         end
 

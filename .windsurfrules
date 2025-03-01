@@ -4,3 +4,4 @@
 4. For each section of the code, include a comment of what it does and why it's necessary. Include the parameters of key function as well (i.e.  * @param {object} sender - Sender information for message passing, * @returns {object} Updated accumulated response and any error)
 5. Please think twice for removing any codes, as it may be already in use, or will be used in future. Do not overstep what you are doing.
 6. Sequence diagram is placed at root of the project, under the name of 'sequence_diagram.md'
+7. When suggesting a new feature, please include the changes to the sequence diagram.
