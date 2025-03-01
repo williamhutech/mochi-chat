@@ -316,9 +316,19 @@ function createHideButton(container) {
   // Initial positioning
   updateButtonPosition();
   
-  // Update position whenever needed
-  const observer = new MutationObserver(updateButtonPosition);
-  observer.observe(container, { attributes: true, attributeFilter: ['class'] });
+  // Update position whenever needed - observe both class changes AND size changes
+  const mutationObserver = new MutationObserver(updateButtonPosition);
+  mutationObserver.observe(container, { attributes: true, attributeFilter: ['class'] });
+  
+  // Add ResizeObserver to detect when the container changes size (extends in length)
+  if (window.ResizeObserver) {
+    const resizeObserver = new ResizeObserver(() => {
+      logToBackground('[Mochi-Content] Chat toggle resize detected, updating hide button position');
+      updateButtonPosition();
+    });
+    resizeObserver.observe(container);
+  }
+  
   window.addEventListener('resize', updateButtonPosition);
   document.addEventListener('scroll', updateButtonPosition);
   
