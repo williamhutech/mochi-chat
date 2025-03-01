@@ -75,6 +75,7 @@ sequenceDiagram
             Content->>Content: hideChatInterface()
         and Content Extraction
             Content->>Content: extractPageText()
+            Content->>Conv: setExtractionComplete(false)
             
             Note right of Content: Dynamic Website Text Extraction
             Content->>Extract: extractText(options)
@@ -94,6 +95,9 @@ sequenceDiagram
             
             Extract-->>Content: Extracted Text
             deactivate Extract
+            
+            Content->>Conv: addExtractedText(text)
+            Conv->>Conv: setExtractionComplete(true)
             
             Content->>Content: checkIfDynamicWebApp()
         end
@@ -121,6 +125,16 @@ sequenceDiagram
         User->>Content: Enter prompt
         activate Content
         Content->>Content: showChatInterface()
+        
+        %% Prompt Queueing System
+        alt Extraction in Progress
+            Content->>Conv: isTextExtractionComplete()
+            Conv-->>Content: false (extraction in progress)
+            Content->>Conv: queuePromptIfNeeded()
+            Note right of Content: Prompt queued while extraction completes
+            Conv-->>Content: Promise resolves when extraction completes
+        end
+        
         Content->>Chat: sendPrompt(prompt)
         activate Chat
     end

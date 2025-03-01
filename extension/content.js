@@ -515,6 +515,12 @@ function resetUIState() {
  */
 async function extractPageText() {
   try {
+    // Set extraction as incomplete before starting
+    if (conversationModule && conversationModule.setExtractionComplete) {
+      conversationModule.setExtractionComplete(false);
+      logToBackground('[Mochi-Content] Setting extraction status to incomplete');
+    }
+    
     // Detect content type and prepare extraction options
     const isPDF = document.contentType === 'application/pdf' || 
                   window.location.href.toLowerCase().endsWith('.pdf');
@@ -581,6 +587,12 @@ async function extractPageText() {
   } catch (error) {
     logToBackground(`[Mochi-Content] Error extracting text: ${error}`, true);
     showError('Failed to extract text from the document');
+    
+    // Ensure extraction is marked as complete even on error
+    if (conversationModule && conversationModule.setExtractionComplete) {
+      conversationModule.setExtractionComplete(true);
+      logToBackground('[Mochi-Content] Setting extraction status to complete after error');
+    }
   }
 }
 
@@ -793,6 +805,18 @@ async function sendPrompt(prompt) {
         <div class="mochi-loading-line"></div>
       </div>
     `;
+    
+    // Check if text extraction is still in progress and queue prompt if needed
+    if (conversationModule && conversationModule.queuePromptIfNeeded) {
+      const extractionComplete = conversationModule.isTextExtractionComplete?.() ?? true;
+      if (!extractionComplete) {
+        logToBackground('[Mochi-Content] Text extraction in progress, queuing prompt');
+        
+        // Wait for extraction to complete before continuing
+        await conversationModule.queuePromptIfNeeded();
+        logToBackground('[Mochi-Content] Extraction completed, proceeding with queued prompt');
+      }
+    }
     
     let screenshot = null;
     

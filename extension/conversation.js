@@ -27,6 +27,18 @@ let createTextContent;
 let conversationHistory = [];
 
 /**
+ * Track pending prompt requests and extraction status
+ * @type {Array<{resolve: Function}>}
+ */
+let pendingPrompts = [];
+
+/**
+ * Flag to track if text extraction is complete
+ * @type {boolean}
+ */
+let isExtractionComplete = false;
+
+/**
  * Initialize required modules
  * @returns {Promise<void>}
  */
@@ -95,6 +107,55 @@ Main instruction/ask: `;
  */
 
 //=============================================================================
+// Extraction Status Management
+//=============================================================================
+
+/**
+ * Set extraction completion status and process any pending prompts
+ * 
+ * @param {boolean} complete - Whether extraction is complete
+ * @returns {void}
+ */
+export function setExtractionComplete(complete = true) {
+  isExtractionComplete = complete;
+  
+  // Process any pending prompts when extraction completes
+  if (complete && pendingPrompts.length > 0) {
+    logToBackground(`[Mochi-Conversation] Processing ${pendingPrompts.length} pending prompts after extraction completion`);
+    // Process all pending prompts in FIFO order
+    while (pendingPrompts.length > 0) {
+      const nextPrompt = pendingPrompts.shift();
+      nextPrompt.resolve();
+    }
+  }
+}
+
+/**
+ * Queue prompt if extraction is not complete
+ * Returns a promise that resolves when extraction is complete
+ * 
+ * @returns {Promise<void>} Promise that resolves when ready to process prompt
+ */
+export function queuePromptIfNeeded() {
+  if (!isExtractionComplete) {
+    logToBackground('[Mochi-Conversation] Extraction not complete, queuing prompt');
+    return new Promise(resolve => {
+      pendingPrompts.push({ resolve });
+    });
+  }
+  return Promise.resolve();
+}
+
+/**
+ * Check if extraction is complete
+ * 
+ * @returns {boolean} Whether extraction is complete
+ */
+export function isTextExtractionComplete() {
+  return isExtractionComplete;
+}
+
+//=============================================================================
 // History Management Functions
 //=============================================================================
 
@@ -128,9 +189,14 @@ export async function addExtractedText(extractedText) {
       logToBackground('---');
     });
     
-    logToBackground('Added extracted text to conversation history');
+    // Mark extraction as complete and process any pending prompts
+    setExtractionComplete(true);
+    
+    logToBackground('[Mochi-Conversation] Added extracted text to conversation history');
   } catch (error) {
-    logToBackground('Failed to add extracted text: ' + error.message, true);
+    logToBackground('[Mochi-Conversation] Failed to add extracted text: ' + error.message, true);
+    // Even on error, mark extraction as complete to prevent hanging
+    setExtractionComplete(true);
     throw error;
   }
 }
