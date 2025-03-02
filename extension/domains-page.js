@@ -35,13 +35,13 @@ async function loadHiddenDomains() {
     // Get hidden domains from background script
     chrome.runtime.sendMessage({ action: 'getHiddenDomains' }, response => {
       if (!response || !response.domains) {
-        displayErrorMessage(container, 'Could not load hidden domains');
+        displayErrorMessage(container, 'Could not load disabled websites');
         return;
       }
       
       const domains = response.domains;
       if (domains.length === 0) {
-        container.innerHTML = '<div class="empty-message">No hidden domains</div>';
+        container.innerHTML = '<div class="empty-message">No disabled websites</div>';
         return;
       }
       
@@ -75,7 +75,7 @@ async function loadHiddenDomains() {
         removeButton.style.cursor = 'pointer';
         removeButton.style.fontSize = '12px';
         removeButton.style.padding = '3px 8px';
-        removeButton.title = 'Re-enable Mochi Chat for this domain';
+        removeButton.title = 'Re-enable Mochi Chat for this website';
         removeButton.onclick = () => removeDomain(domain);
         
         domainItem.appendChild(domainText);
@@ -105,7 +105,7 @@ function removeDomain(domain) {
       // Reload domain list
       loadHiddenDomains();
     } else {
-      console.error('[Mochi-Extension] Error removing domain:', domain);
+      console.error('[Mochi-Extension] Error removing websites from hidden list:', domain);
     }
   });
 }
@@ -125,7 +125,7 @@ function clearAllHiddenDomains() {
     if (response && response.success) {
       loadHiddenDomains();
     } else {
-      console.error('[Mochi-Extension] Error clearing hidden domains');
+      console.error('[Mochi-Extension] Error clearing disabled websites');
       if (clearButton) {
         clearButton.textContent = 'Clear All';
         clearButton.disabled = false;

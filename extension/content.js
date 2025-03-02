@@ -944,6 +944,12 @@ async function extractPageText() {
     
     logToBackground('[Mochi-Content] Text extraction completed and added to conversation');
     
+    // Mark extraction as complete
+    if (conversationModule && conversationModule.setExtractionComplete) {
+      conversationModule.setExtractionComplete(true);
+      logToBackground('[Mochi-Content] Setting extraction status to complete');
+    }
+    
   } catch (error) {
     logToBackground(`[Mochi-Content] Error extracting text: ${error}`, true);
     showError('Failed to extract text from the document');
@@ -1449,11 +1455,11 @@ function renderMarkdown(text) {
     
     // Extract and store LaTeX blocks, including align environments and inline math
     text = text.replace(
-      // Updated regex for more precise matching
-      /(\$\$[\s\S]*?\$\$|(?<!\$)(?<!\w)\$(?!\s)(?:(?!\$).)*?\$(?!\d)(?!\w)|\\begin\{align\*\}[\s\S]*?\\end\{align\*\}|\\begin\{align\}[\s\S]*?\\end\{align\}|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g,
+      // Updated regex for more precise matching - improved to handle financial text with dollar signs
+      /(\$\$[\s\S]*?\$\$|(?<!\$)(?<!\w)\$(?!\s)(?!\d)(?:(?!\$).)*?\$(?!\d)(?!\w)|\\begin\{align\*\}[\s\S]*?\\end\{align\*\}|\\begin\{align\}[\s\S]*?\\end\{align\}|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\))/g,
       (match) => {
-        // Skip if it looks like a monetary value (e.g. $100, $99.99)
-        if (match.match(/^\$\s*\d+(?:\.\d{2})?$/)) {
+        // Skip if it looks like a monetary value with text after it (e.g. $100 million, $99.99 billion)
+        if (match.match(/^\$\s*\d+(?:\.\d+)?(?:\s+(?:million|billion|trillion|thousand|hundred|[kKmMbBtT])?)?$/)) {
           return match;
         }
         
@@ -2429,12 +2435,24 @@ async function initializeContent() {
       hideChatInterface();
     }
     
-    // Extract page text and check for dynamic web app in parallel
-    const extractionPromise = extractPageText();
-    const dynamicCheckPromise = checkIfDynamicWebApp();
+    // Check if the current page is a PDF
+    const isPDF = document.contentType === 'application/pdf' || 
+                  window.location.href.toLowerCase().endsWith('.pdf');
     
-    // Wait for both to complete
-    await Promise.all([extractionPromise, dynamicCheckPromise]);
+    // Extract page text and only check for dynamic web app if not a PDF
+    const extractionPromise = extractPageText();
+    
+    if (isPDF) {
+      logToBackground('[Mochi-Content] PDF detected, skipping dynamic web app check');
+      // For PDFs, we'll default to non-dynamic behavior
+      updateModelBasedOnDynamicDetection(false);
+      window.mochiDynamicDetectionComplete = true;
+    } else {
+      // Only run checkIfDynamicWebApp for non-PDF pages
+      const dynamicCheckPromise = checkIfDynamicWebApp();
+      // Wait for both extraction and dynamic check to complete
+      await Promise.all([extractionPromise, dynamicCheckPromise]);
+    }
     
     // Set up print mode handling
     setupPrintModeHandling();
