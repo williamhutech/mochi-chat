@@ -133,6 +133,58 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse(null);
       }
       return true;
+      
+    case "getHiddenDomains":
+      chrome.storage.local.get('mochiHiddenDomains', (result) => {
+        const hiddenDomains = result.mochiHiddenDomains || [];
+        logToConsole(`Retrieved ${hiddenDomains.length} hidden domains`);
+        sendResponse({ domains: hiddenDomains });
+      });
+      return true;
+      
+    case "clearHiddenDomains":
+      chrome.storage.local.set({ mochiHiddenDomains: [] }, () => {
+        logToConsole('Cleared all hidden domains from storage');
+        sendResponse({ success: true });
+      });
+      return true;
+      
+    case "removeDomainFromHidden":
+      if (!request.domain) {
+        sendResponse({ success: false, error: 'No domain provided' });
+        return true;
+      }
+      
+      chrome.storage.local.get('mochiHiddenDomains', (result) => {
+        const hiddenDomains = result.mochiHiddenDomains || [];
+        const updatedDomains = hiddenDomains.filter(domain => domain !== request.domain);
+        
+        chrome.storage.local.set({ mochiHiddenDomains: updatedDomains }, () => {
+          const removed = hiddenDomains.length !== updatedDomains.length;
+          logToConsole(`Domain ${request.domain} ${removed ? 'removed from' : 'not found in'} hidden domains list`);
+          sendResponse({ success: true, removed });
+          
+          // If domain was removed, notify all content scripts on this domain
+          if (removed) {
+            chrome.tabs.query({}, (tabs) => {
+              tabs.forEach(tab => {
+                try {
+                  const tabDomain = new URL(tab.url).hostname.replace(/^www\./, '');
+                  if (tabDomain === request.domain) {
+                    chrome.tabs.sendMessage(tab.id, { 
+                      action: "removeDomainFromHidden", 
+                      domain: request.domain 
+                    });
+                  }
+                } catch (error) {
+                  // Ignore invalid URLs
+                }
+              });
+            });
+          }
+        });
+      });
+      return true;
   }
   
   return true;

@@ -68,12 +68,27 @@ sequenceDiagram
         Content->>Background: Log initialization
         Background-->>Content: Logged
 
-        %% Parallel initialization processes
-        par UI Initialization
+        %% Check Hidden Domains before UI Initialization
+        Content->>Content: extractBaseDomain()
+        Content->>Content: shouldHideChatToggle()
+        activate Content
+        Content->>Chrome: chrome.storage.local.get()
+        Chrome-->>Content: hiddenDomains
+        deactivate Content
+        
+        alt Domain is in Hidden List
+            Content->>Content: initializeChatInputHidden()
+            Note right of Content: Create UI elements in hidden state
+        else Domain is not Hidden
+            %% Regular UI Initialization
             Content->>Content: initializeChatInput()
-            Content->>Content: createChatInterface()
-            Content->>Content: hideChatInterface()
-        and Content Extraction
+        end
+        
+        Content->>Content: createChatInterface()
+        Content->>Content: hideChatInterface()
+
+        %% Parallel initialization processes
+        par Content Extraction
             Content->>Content: extractPageText()
             Content->>Conv: setExtractionComplete(false)
             
@@ -158,6 +173,91 @@ sequenceDiagram
         
         Content->>Chat: sendPrompt(prompt)
         activate Chat
+    end
+    
+    %% Domain Management for Hidden Chat Toggle
+    rect rgb(240, 240, 240)
+        Note over User,Gemini: 2.1. Domain Management
+        
+        %% Hide Chat Toggle Flow
+        User->>Content: Click hide button on chat toggle
+        activate Content
+        Content->>Content: extractBaseDomain()
+        Content->>Content: addDomainToHiddenList(domain)
+        
+        Content->>Chrome: chrome.storage.local.get()
+        Chrome-->>Content: hiddenDomains
+        
+        Content->>Chrome: chrome.storage.local.set()
+        Note right of Content: Update hidden domains list
+        
+        Content->>Content: invalidateHiddenDomainsCache()
+        Content->>Content: hideChatToggle()
+        Content-->>User: Chat toggle hidden
+        deactivate Content
+        
+        %% Show Chat Toggle on Hidden Domain Flow
+        User->>Content: Use Alt+M to show chat toggle
+        activate Content
+        Content->>Content: showChatToggle()
+        Content->>Content: shouldHideChatToggle()
+        Content->>Chrome: chrome.storage.local.get()
+        Chrome-->>Content: hiddenDomains
+        
+        alt Domain is in Hidden List
+            Content->>Content: Ask to keep domain hidden
+            
+            alt User chooses to keep hidden
+                Content-->>User: Display notification
+                Content->>Content: Keep domain in hidden list
+            else User chooses to show toggle
+                Content->>Content: removeDomainFromHiddenList()
+                Content->>Chrome: chrome.storage.local.set()
+                Note right of Content: Remove domain from hidden list
+                Content->>Content: invalidateHiddenDomainsCache() 
+                Content->>Content: showChatToggle()
+                Content-->>User: Chat toggle visible
+            end
+        else Domain is not Hidden
+            Content->>Content: showChatToggle()
+            Content-->>User: Chat toggle visible
+        end
+        deactivate Content
+        
+        %% Manage Hidden Domains in Popup
+        User->>Chrome: Open extension popup
+        Chrome->>Chrome: extension-popup.js
+        activate Chrome
+        Chrome-->>User: Display main popup
+        
+        User->>Chrome: Click "Re-Enable for Domains"
+        Chrome->>Chrome: Navigate to domains page
+        Chrome-->>User: Display domains page
+        
+        Chrome->>Background: getHiddenDomains()
+        Background->>Chrome: chrome.storage.local.get()
+        Chrome-->>Background: hiddenDomains
+        Background-->>Chrome: domains list
+        Chrome-->>User: Display hidden domains
+        
+        User->>Chrome: Click to remove domain
+        Chrome->>Background: removeDomainFromHidden()
+        Background->>Chrome: chrome.storage.local.get()
+        Chrome-->>Background: hiddenDomains
+        Background->>Chrome: chrome.storage.local.set()
+        Background-->>Chrome: domain removed
+        Chrome-->>User: Updated hidden domains list
+        
+        User->>Chrome: Click "Clear All"
+        Chrome->>Background: clearHiddenDomains()
+        Background->>Chrome: chrome.storage.local.set()
+        Background-->>Chrome: all domains cleared
+        Chrome-->>User: Empty hidden domains list
+        
+        User->>Chrome: Click "Back"
+        Chrome->>Chrome: Navigate to main popup
+        Chrome-->>User: Display main popup
+        deactivate Chrome
     end
         
     %% Request Preparation

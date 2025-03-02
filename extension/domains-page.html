@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mochi Chat</title>
+    <title>Mochi Chat - Hidden Domains</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -46,8 +46,6 @@
             align-items: center;
             gap: 10px;
             margin-bottom: 4px;
-            position: relative;
-            justify-content: flex-start;
         }
 
         .logo {
@@ -83,18 +81,7 @@
             font-size: 13px;
             color: var(--text-color);
         }
-
-        .keyboard-shortcut {
-            display: inline-block;
-            background: var(--bg-color);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            padding: 1px 6px;
-            font-size: 12px;
-            font-weight: 500;
-            margin: 0 2px;
-        }
-
+        
         .btn {
             display: inline-block;
             background: var(--primary-color);
@@ -113,23 +100,37 @@
         .btn:hover {
             background: var(--hover-color);
         }
-
-        .feature-list {
-            margin: 8px 0 0 0;
-            padding-left: 16px;
-        }
-
-        .feature-list li {
-            margin: 4px 0;
-            font-size: 13px;
-            color: var(--text-color);
-        }
-
-        .version {
+        
+        .secondary-btn {
+            background: transparent;
             color: var(--primary-color);
-            margin-left: 4px;
+            border: 1px solid var(--primary-color);
         }
-
+        
+        .secondary-btn:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+        
+        .nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        
+        .back-link {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            color: var(--primary-color);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        .back-link svg {
+            margin-right: 4px;
+        }
+        
         .footer {
             margin-top: 4px;
             text-align: center;
@@ -145,74 +146,33 @@
         .footer a {
             color: var(--primary-color);
         }
-
-        .settings-link {
-            position: absolute;
-            right: 0;
-            display: flex;
-            align-items: center;
-            font-size: 13px;
-            color: var(--primary-color);
-            text-decoration: none;
-            margin-left: auto;
-            transition: color 0.15s ease;
-        }
-
-        .settings-link svg {
-            margin-left: 4px;
-        }
-
-        .settings-link:hover {
-            color: var(--hover-color);
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">
-                <img src="logo.png" alt="Mochi Chat Logo">
+            <div class="nav-header">
+                <a class="back-link" id="back-button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                    </svg>
+                    Back
+                </a>
+                <h1>Re-Enable for Domains</h1>
             </div>
-            <h1>Mochi Chat</h1>
-            <a id="domains-link" class="settings-link" href="#" title="Manage hidden domains">
-                Re-Enable for Domains
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M5 12h14M12 5l7 7-7 7"></path>
-                </svg>
-            </a>
         </div>
 
         <div class="section">
-            <div class="section-title">🎉 What's New in<span class="version">v1.7</span></div>
-            <ul class="feature-list">
-                <li>Huge improvement to the websites supported</li>
-                <li>User may now hide Mochi on preferred webpage</li>
-                <li>Added prompt queue feature</li>
-                <li>Extension initialization is now faster</li>
-                <li>Fixed bug where Mochi appeared on Print pages</li>   
-            </ul>
-        </div>
-
-        <div class="section">
-            <div class="section-title">Quick Access</div>
+            <div class="section-title">Hidden Domains</div>
             <div class="section-content">
-                Press <span class="keyboard-shortcut">⌘K</span> (Mac) or <span class="keyboard-shortcut">Ctrl+K</span> (Windows) to enable chat with ease!
+                Manage domains where you've chosen to hide the chat toggle.
+                <div id="hidden-domains-container" style="margin-top: 10px; max-height: 240px; overflow-y: auto;">
+                    <div class="loading-message">Loading domains...</div>
+                </div>
+                <button class="btn" id="clearHiddenDomains" style="display: none;">Clear All</button>
             </div>
-        </div>
-
-        <div class="section">
-            <div class="section-title">Chat Mode</div>
-            <div class="section-content">
-                Works with PDFs and websites - just ask anything! For PDFs, ensure local file access is enabled
-                <button class="btn" id="openExtensions">Enable File Access</button>
-            </div>
-        </div>
-
-        <div class="footer">
-            <p>Made with ❤️ from Singapore</p>
-            <p>Built by <a href="https://linkedin.com/in/williamhutech" target="_blank" rel="noopener noreferrer">Will</a></p>
         </div>
     </div>
-    <script src="extension-popup.js"></script>
+    <script src="domains-page.js"></script>
 </body>
 </html>

@@ -273,6 +273,112 @@ async function initializeChatInput() {
 }
 
 /**
+ * Initialize chat input field in hidden state
+ * Creates the input field but keeps it hidden from the start
+ * @returns {Promise<void>}
+ */
+async function initializeChatInputHidden() {
+  try {
+    // First create a container with hidden state
+    const container = document.createElement('div');
+    container.id = 'mochi-chat-input-container';
+    
+    // Apply hidden styles BEFORE adding to DOM
+    container.classList.add('mochi-chat-toggle-hidden');
+    container.style.display = 'none';
+    container.style.visibility = 'hidden';
+    container.style.opacity = '0';
+    
+    // Now proceed with the rest of the creation
+    // but add to DOM only after all setup is complete
+    container.addEventListener('click', () => {
+      toggleChatInterface();
+    });
+    
+    // Create input field
+    const input = document.createElement('input');
+    input.id = 'mochi-chat-input-field';
+    input.type = 'text';
+    input.placeholder = 'Ask anything...';
+
+    // Create submit button
+    const submitButton = document.createElement('button');
+    submitButton.id = 'mochi-chat-submit-button';
+    submitButton.type = 'button';
+    submitButton.disabled = true;
+    submitButton.innerHTML = `
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10 16L22 16M22 16L17 11M22 16L17 21" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+      <span class="loader"></span>
+    `;
+    
+    // Setup the input events (same as regular initialization but without DOM interaction yet)
+    const updateInputState = (input, submitButton) => {
+      const hasContent = input.value.trim().length > 0;
+      submitButton.disabled = !hasContent;
+      if (hasContent) {
+        container.classList.add('has-content');
+      } else {
+        container.classList.remove('has-content');
+      }
+    };
+    
+    input.addEventListener('input', () => {
+      updateInputState(input, submitButton);
+    });
+
+    input.addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter' && document.activeElement === input && input.value.trim() && !isStreaming) {
+        e.preventDefault();
+        const prompt = input.value.trim();
+        input.value = '';
+        updateInputState(input, submitButton);
+        await sendPrompt(prompt);
+      }
+    });
+
+    submitButton.addEventListener('click', async () => {
+      if (document.activeElement === input && input.value.trim() && !isStreaming) {
+        const prompt = input.value.trim();
+        input.value = '';
+        updateInputState(input, submitButton);
+        await sendPrompt(prompt);
+      }
+    });
+    
+    // Now assemble the components
+    container.appendChild(input);
+    container.appendChild(submitButton);
+    
+    // Add to DOM only after everything is set up
+    document.body.appendChild(container);
+    
+    // Create hidden hide button
+    const hideButton = document.createElement('button');
+    hideButton.id = 'mochi-chat-toggle-hide-button';
+    hideButton.style.display = 'none';
+    hideButton.style.visibility = 'hidden';
+    hideButton.style.opacity = '0';
+    hideButton.innerHTML = `
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    `;
+    hideButton.title = 'Hide chat toggle (use Alt+M to show again)';
+    
+    // Add to DOM
+    document.body.appendChild(hideButton);
+    
+    logToBackground('[Mochi-Content] Chat toggle created in hidden state');
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error initializing hidden chat input: ' + error.message, true);
+    throw error;
+  }
+}
+
+/**
  * Create a separate hide button that appears when hovering over the chat toggle
  * Positions the button relative to the container but outside its DOM hierarchy
  * @param {HTMLElement} container - The chat toggle container element
@@ -293,7 +399,7 @@ function createHideButton(container) {
       <line x1="6" y1="6" x2="18" y2="18"></line>
     </svg>
   `;
-  hideButton.title = 'Hide chat toggle (use Cmd+K/Ctrl+K to show again)';
+  hideButton.title = 'Hide chat toggle (use Alt+M to show again)';
   
   // Add the button directly to the body, not inside the container
   document.body.appendChild(hideButton);
@@ -379,7 +485,15 @@ function createHideButton(container) {
       chatToggle.style.display = 'none';
       chatToggle.style.visibility = 'hidden';
       chatToggle.style.opacity = '0';
-      logToBackground('[Mochi-Content] Chat toggle hidden from button');
+      
+      // Store domain in hidden domains list
+      const currentDomain = extractBaseDomain(window.location.href);
+      if (currentDomain) {
+        addDomainToHiddenList(currentDomain);
+        logToBackground(`[Mochi-Content] Chat toggle hidden for domain: ${currentDomain}`);
+      } else {
+        logToBackground('[Mochi-Content] Chat toggle hidden but couldn\'t extract domain');
+      }
     }
     
     // Hide the button itself
@@ -387,6 +501,172 @@ function createHideButton(container) {
     
     return false;
   });
+}
+
+/**
+ * Extract the base domain from a URL
+ * @param {string} url - The URL to extract domain from
+ * @returns {string} The base domain (e.g., 'example.com' from 'https://www.example.com/page')
+ */
+function extractBaseDomain(url) {
+  try {
+    // Create a URL object
+    const urlObj = new URL(url);
+    // Get the hostname (e.g., www.example.com)
+    let hostname = urlObj.hostname;
+    
+    // Remove 'www.' if present
+    if (hostname.startsWith('www.')) {
+      hostname = hostname.substring(4);
+    }
+    
+    return hostname;
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error extracting domain: ' + error.message, true);
+    return '';
+  }
+}
+
+/**
+ * Store domain in hidden domains list
+ * @param {string} domain - Domain to store
+ * @returns {Promise<void>}
+ */
+async function addDomainToHiddenList(domain) {
+  if (!domain) return;
+  
+  try {
+    // Get current hidden domains
+    const result = await chrome.storage.local.get('mochiHiddenDomains');
+    let hiddenDomains = result.mochiHiddenDomains || [];
+    
+    // Add domain if not already in the list
+    if (!hiddenDomains.includes(domain)) {
+      hiddenDomains.push(domain);
+      // Store updated list
+      await chrome.storage.local.set({ mochiHiddenDomains: hiddenDomains });
+      logToBackground(`[Mochi-Content] Added ${domain} to hidden domains list`);
+      invalidateHiddenDomainsCache();
+    }
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error storing hidden domain: ' + error.message, true);
+  }
+}
+
+/**
+ * Remove a domain from the hidden domains list
+ * @param {string} domain - Domain to remove
+ * @returns {Promise<boolean>} True if domain was removed
+ */
+async function removeDomainFromHiddenList(domain) {
+  if (!domain) return false;
+  
+  try {
+    // Get current hidden domains
+    const result = await chrome.storage.local.get('mochiHiddenDomains');
+    let hiddenDomains = result.mochiHiddenDomains || [];
+    
+    // Check if domain is in the list
+    if (!hiddenDomains.includes(domain)) {
+      return false;
+    }
+    
+    // Remove domain from list
+    const updatedDomains = hiddenDomains.filter(d => d !== domain);
+    
+    // Store updated list
+    await chrome.storage.local.set({ mochiHiddenDomains: updatedDomains });
+    logToBackground(`[Mochi-Content] Removed ${domain} from hidden domains list`);
+    invalidateHiddenDomainsCache();
+    return true;
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error removing domain from hidden list: ' + error.message, true);
+    return false;
+  }
+}
+
+/**
+ * Get all domains in the hidden domains list
+ * @returns {Promise<string[]>} List of hidden domains
+ */
+async function getHiddenDomains() {
+  try {
+    const result = await chrome.storage.local.get('mochiHiddenDomains');
+    return result.mochiHiddenDomains || [];
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error getting hidden domains: ' + error.message, true);
+    return [];
+  }
+}
+
+/**
+ * Cache to store the result of domain checks to avoid repeated storage access
+ * @type {Object}
+ */
+const hiddenDomainsCache = {
+  domains: null,
+  timestamp: 0,
+  // Cache valid for 5 minutes
+  CACHE_TTL: 5 * 60 * 1000
+};
+
+/**
+ * Get all domains in the hidden domains list with caching
+ * @returns {Promise<string[]>} List of hidden domains
+ */
+async function getHiddenDomains() {
+  try {
+    // Check if we have a valid cached value
+    const now = Date.now();
+    if (hiddenDomainsCache.domains !== null && (now - hiddenDomainsCache.timestamp) < hiddenDomainsCache.CACHE_TTL) {
+      logToBackground('[Mochi-Content] Using cached hidden domains list');
+      return hiddenDomainsCache.domains;
+    }
+    
+    // If no valid cache, get from storage
+    const result = await chrome.storage.local.get('mochiHiddenDomains');
+    const domains = result.mochiHiddenDomains || [];
+    
+    // Update cache
+    hiddenDomainsCache.domains = domains;
+    hiddenDomainsCache.timestamp = now;
+    
+    return domains;
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error getting hidden domains: ' + error.message, true);
+    return [];
+  }
+}
+
+/**
+ * Check if current domain is in hidden domains list
+ * Uses caching for faster performance during initialization
+ * @returns {Promise<boolean>} True if current domain should be hidden
+ */
+async function shouldHideChatToggle() {
+  try {
+    const currentDomain = extractBaseDomain(window.location.href);
+    if (!currentDomain) return false;
+    
+    // Get hidden domains from cached storage
+    const hiddenDomains = await getHiddenDomains();
+    
+    // Check if current domain is in the list
+    return hiddenDomains.includes(currentDomain);
+  } catch (error) {
+    logToBackground('[Mochi-Content] Error checking hidden domains: ' + error.message, true);
+    return false;
+  }
+}
+
+/**
+ * Invalidate the hidden domains cache
+ * Call this after any changes to the hidden domains list
+ */
+function invalidateHiddenDomainsCache() {
+  hiddenDomainsCache.domains = null;
+  hiddenDomainsCache.timestamp = 0;
+  logToBackground('[Mochi-Content] Hidden domains cache invalidated');
 }
 
 /**
@@ -493,7 +773,77 @@ function hideChatToggle() {
  * Show the chat toggle button if it was hidden
  * @returns {void}
  */
-function showChatToggle() {
+async function showChatToggle() {
+  // Check if current domain is in hidden list
+  const currentDomain = extractBaseDomain(window.location.href);
+  const result = await chrome.storage.local.get('mochiHiddenDomains');
+  const hiddenDomains = result.mochiHiddenDomains || [];
+  
+  // If domain is in hidden list and user activates via keyboard shortcut,
+  // Ask if they want to remove the domain from hidden list
+  if (currentDomain && hiddenDomains.includes(currentDomain)) {
+    logToBackground(`[Mochi-Content] Chat toggle requested for hidden domain: ${currentDomain}`);
+    
+    // Show temporary notification to user
+    const notification = document.createElement('div');
+    notification.style.position = 'fixed';
+    notification.style.bottom = '20px';
+    notification.style.right = '20px';
+    notification.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+    notification.style.color = 'white';
+    notification.style.padding = '10px 15px';
+    notification.style.borderRadius = '5px';
+    notification.style.zIndex = '9999999';
+    notification.style.fontFamily = 'Arial, sans-serif';
+    notification.style.fontSize = '14px';
+    notification.style.maxWidth = '300px';
+    notification.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.3)';
+    notification.innerHTML = `
+      <div style="margin-bottom: 10px;">Chat toggle was hidden for ${currentDomain}.</div>
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="mochi-keep-hidden" style="padding: 5px 10px; background: #555; border: none; color: white; border-radius: 3px; cursor: pointer;">Keep Hidden</button>
+        <button id="mochi-show-always" style="padding: 5px 10px; background: #4285f4; border: none; color: white; border-radius: 3px; cursor: pointer;">Show Always</button>
+      </div>
+    `;
+    document.body.appendChild(notification);
+    
+    // Handle user choice
+    document.getElementById('mochi-keep-hidden').addEventListener('click', () => {
+      notification.remove();
+    });
+    
+    document.getElementById('mochi-show-always').addEventListener('click', async () => {
+      // Remove domain from hidden list
+      const updatedDomains = hiddenDomains.filter(domain => domain !== currentDomain);
+      await chrome.storage.local.set({ mochiHiddenDomains: updatedDomains });
+      logToBackground(`[Mochi-Content] Removed ${currentDomain} from hidden domains list`);
+      invalidateHiddenDomainsCache();
+      
+      // Show the toggle
+      const chatToggle = document.getElementById('mochi-chat-input-container');
+      if (chatToggle) {
+        // Remove both CSS class and inline styles
+        chatToggle.classList.remove('mochi-chat-toggle-hidden');
+        chatToggle.style.display = '';
+        chatToggle.style.visibility = '';
+        chatToggle.style.opacity = '';
+        logToBackground('[Mochi-Content] Chat toggle shown after removal from hidden list');
+      }
+      
+      notification.remove();
+    });
+    
+    // Auto-remove notification after 7 seconds
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        notification.remove();
+      }
+    }, 7000);
+    
+    return;
+  }
+  
+  // If not in hidden list, show toggle normally
   const chatToggle = document.getElementById('mochi-chat-input-container');
   if (chatToggle) {
     // Remove both CSS class and inline styles
@@ -1870,12 +2220,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case "logFromContent":
       logToBackground(message.message, message.isError);
       break;
+      
+    case "removeDomainFromHidden":
+      if (message.domain) {
+        removeDomainFromHiddenList(message.domain)
+          .then(success => {
+            sendResponse({ success });
+            if (success) {
+              // Show the chat toggle if on the domain that was just removed
+              const currentDomain = extractBaseDomain(window.location.href);
+              if (currentDomain === message.domain) {
+                showChatToggle();
+              }
+            }
+          })
+          .catch(error => {
+            logToBackground('[Mochi-Content] Error in removeDomainFromHidden: ' + error.message, true);
+            sendResponse({ success: false, error: error.message });
+          });
+        return true; // Indicates async response
+      }
+      sendResponse({ success: false, error: 'No domain provided' });
+      break;
+      
+    case "getHiddenDomains":
+      getHiddenDomains()
+        .then(domains => {
+          sendResponse({ success: true, domains });
+        })
+        .catch(error => {
+          logToBackground('[Mochi-Content] Error in getHiddenDomains: ' + error.message, true);
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Indicates async response
   }
   
-  // Send response to acknowledge receipt
-  if (sendResponse) {
-    sendResponse({ received: true });
-  }
+  return true;
 });
 
 //=============================================================================
@@ -2028,10 +2408,26 @@ async function initializeContent() {
     // Initialize KaTeX options
     initializeKaTeX();
     
-    // Create UI components
-    await initializeChatInput();
-    await createChatInterface();
-    hideChatInterface();
+    // Check if chat toggle should be hidden based on domain BEFORE creating UI
+    const shouldHide = await shouldHideChatToggle();
+    
+    // Create UI components with visibility based on domain preferences
+    if (shouldHide) {
+      // Create UI in hidden state first
+      logToBackground(`[Mochi-Content] Domain is in hidden list, creating UI in hidden state`);
+      
+      // Create chat interface (always needed for toggle chat command)
+      await createChatInterface();
+      hideChatInterface();
+      
+      // Create input but keep it hidden
+      await initializeChatInputHidden();
+    } else {
+      // Normal initialization (visible)
+      await initializeChatInput();
+      await createChatInterface();
+      hideChatInterface();
+    }
     
     // Extract page text and check for dynamic web app in parallel
     const extractionPromise = extractPageText();

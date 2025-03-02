@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await chrome.storage.local.set({ hasUnreadUpdate: false });
   }
 
-// Open extensions page when button is clicked
+  // Open extensions page when button is clicked
   const openExtensionsButton = document.getElementById('openExtensions');
   
   if (openExtensionsButton) {
@@ -31,5 +31,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   } else {
     console.error('[Mochi-Extension] Could not find extensions button');
+  }
+  
+  // Set up domains link
+  const domainsLink = document.getElementById('domains-link');
+  if (domainsLink) {
+    domainsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      // Navigate to domains page
+      window.location.href = 'domains-page.html';
+    });
   }
 });
