@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mochi Chat",
-  "version": "1.6",
+  "version": "1.7",
   "description": "Chat with your PDFs and websites using AI",
   "author": "Team Mochi",
   "icons": {

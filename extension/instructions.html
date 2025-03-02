@@ -6,17 +6,33 @@
     <title>Welcome to Mochi Chat</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #000000;
-            --text-color: #171717;
-            --secondary-text: #666666;
-            --bg-color: #FFFFFF;
-            --border-color: #EAEAEA;
-            --hover-color: #2D2D2D;
-            --border-radius: 8px;
-            --box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            /* Main color palette */
+            --primary-color: #6768ab;           /* Lavender Blue */
+            --secondary-color: #e89a6c;         /* Soft Peach */
+            --tertiary-color: #85c3ca;          /* Soft Teal */
+            --accent-color: #f6c177;            /* Golden Yellow */
+            
+            /* Text colors */
+            --text-color: #0f0f0f;
+            --secondary-text: #4a4a4a;
+            --light-text: #ffffff;
+            
+            /* Background colors */
+            --bg-color: #ffffff;
+            --slide-bg: #ffffff;
+
+            /* Button colors */
+            --button-color: #212121;            /* Dark Grey */
+            --button-hover: #000000;            /* Black */
+
+            /* UI Elements */
+            --border-color: #e6e6e6;
+            --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            --border-radius: 16px;
+            --transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         * {
@@ -26,197 +42,387 @@
         }
 
         body {
-            font-family: 'Noto Sans', sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             line-height: 1.5;
-            color: var(--text-color);
-            background: var(--bg-color);
-            display: flex;
             min-height: 100vh;
+            display: flex;
             justify-content: center;
             align-items: center;
             -webkit-font-smoothing: antialiased;
             margin: 0;
             padding: 0;
+            overflow-x: hidden;
+            background: linear-gradient(135deg, #6768ab, #85c3ca, #e89a6c, #f6c177);
+            background-size: 400% 400%;
+            animation: gradientAnimation 15s ease infinite;
+            position: relative;
+        }
+
+        /* Background animation */
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Gaussian blur overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            backdrop-filter: blur(80px);
+            -webkit-backdrop-filter: blur(80px);
+            z-index: -1;
         }
 
         .container {
-            max-width: 1000px;
-            width: 100%;
-            padding: 3rem 2rem;
+            max-width: 720px;
+            width: 90%;
+            padding: 1.8rem;
             text-align: center;
+            position: relative;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+            z-index: 1;
+        }
+
+        .slideshow {
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slides {
+            display: flex;
+            width: 100%;
+            height: 400px;
+            transition: var(--transition);
+        }
+
+        .slide {
+            min-width: 100%;
+            padding: 2rem 1.5rem;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-        }
-
-        .welcome-icon {
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 1.5rem;
-            opacity: 0.9;
-        }
-
-        .welcome-icon img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
+            opacity: 1;
+            transition: var(--transition);
         }
 
         h1 {
-            font-size: 2.5rem;
+            font-family: 'Inter', sans-serif;
+            font-size: 2.3rem;
             font-weight: 600;
-            margin-bottom: 1rem;
+            margin-bottom: 1.2rem;
+            color: var(--text-color);
+            letter-spacing: -0.02em;
+        }
+
+        h2 {
+            font-family: 'Inter', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 600;
+            margin-bottom: 1.2rem;
             color: var(--text-color);
             letter-spacing: -0.02em;
         }
 
         .subtitle {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             color: var(--secondary-text);
-            margin-bottom: 3rem;
-            line-height: 1.6;
-        }
-
-        .steps-container {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 2rem;
-            margin: 0 auto 2.5rem;
-            width: 100%;
-            max-width: 1000px;
-        }
-
-        .step-box {
-            background: var(--bg-color);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            padding: 1.5rem;
-            text-align: left;
-            transition: all 0.2s ease;
-            box-shadow: var(--box-shadow);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: flex-start;
-            height: 100%;
-        }
-
-        .step-number {
-            color: var(--primary-color);
-            font-weight: 600;
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 0.75rem;
-            display: block;
+            margin-bottom: 1.5rem;
+            line-height: 1.5;
+            max-width: 550px;
         }
 
         .step-content {
             color: var(--text-color);
             font-size: 1rem;
-            line-height: 1.6;
-            margin-bottom: 1.25rem;
-            flex-grow: 1;
-            text-align: left;
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            max-width: 550px;
         }
 
         kbd {
-            background-color: var(--bg-color);
+            background-color: #f5f5f5;
             border: 1px solid var(--border-color);
-            border-radius: 4px;
+            border-radius: 6px;
             box-shadow: 0 1px 0 rgba(0,0,0,0.1);
             color: var(--text-color);
             display: inline-block;
             font-family: monospace;
-            font-size: 0.9em;
+            font-size: 0.95em;
             line-height: 1.4;
             margin: 0 0.1em;
-            padding: 0.1em 0.6em;
+            padding: 0.2em 0.6em;
         }
 
         .btn {
             display: inline-block;
-            background: var(--primary-color);
-            color: white;
-            padding: 0.75rem 1.75rem;
-            border-radius: var(--border-radius);
+            background: var(--button-color);
+            color: var(--light-text);
+            padding: 0.8rem 1.8rem;
+            border-radius: 8px;
             text-decoration: none;
             font-weight: 500;
             font-size: 1rem;
             border: none;
             cursor: pointer;
-            transition: all 0.15s ease;
+            transition: var(--transition);
+            margin-top: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, rgba(255,255,255,0.1), rgba(255,255,255,0.2), rgba(255,255,255,0.1));
+            transform: translateX(-100%);
+            transition: transform 0.8s ease;
         }
 
         .btn:hover {
-            background: var(--hover-color);
-            transform: translateY(-1px);
+            background: var(--button-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         }
 
-        .happy-note {
-            font-size: 1rem;
+        .btn:hover::before {
+            transform: translateX(100%);
+        }
+
+        .btn:disabled {
+            background: var(--border-color);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn:disabled::before {
+            display: none;
+        }
+
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-top: 1.5rem;
+        }
+
+        .nav-btn {
+            background: var(--button-color);
+            color: var(--light-text);
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: var(--transition);
+            border: none;
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            background: var(--button-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .nav-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .illustration {
+            margin: 1.2rem 0;
+            max-width: 100%;
+            max-height: 160px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transition: var(--transition);
+            transform: perspective(1000px) rotateX(0deg);
+        }
+
+        .illustration:hover {
+            transform: perspective(1000px) rotateX(2deg);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        }
+
+        /* Feature cards for slide 3 */
+        .feature-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.8rem;
+            margin: 1.2rem 0;
+            width: 100%;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            padding: 0.8rem;
+            width: calc(50% - 0.4rem);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100px; /* Fixed height for consistency */
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.09);
+        }
+
+        .feature-icon {
+            font-size: 1.4rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .feature-title {
+            font-weight: 600;
+            margin-bottom: 0.3rem;
+            color: var(--text-color);
+            font-size: 0.9rem;
+        }
+
+        .feature-desc {
+            font-size: 0.8rem;
             color: var(--secondary-text);
-            margin-top: 2rem;
+            line-height: 1.3;
         }
 
         @media (max-width: 768px) {
-            .container {
-                padding: 2rem 1.5rem;
+            body {
+                padding: 1rem;
             }
 
-            .steps-container {
-                grid-template-columns: 1fr;
-                gap: 1rem;
+            .container {
+                width: 95%;
+                padding: 1.5rem 1rem;
+            }
+
+            .slide {
+                padding: 1.2rem 0.8rem;
+                height: auto;
+                min-height: 380px;
             }
 
             h1 {
-                font-size: 2rem;
+                font-size: 1.8rem;
+            }
+
+            h2 {
+                font-size: 1.4rem;
             }
 
             .subtitle {
-                font-size: 1.1rem;
-                margin-bottom: 2rem;
+                font-size: 1rem;
+                margin-bottom: 1.2rem;
+            }
+
+            .step-content {
+                font-size: 0.95rem;
+            }
+
+            .slides {
+                height: 420px;
+            }
+
+            .feature-grid {
+                flex-direction: column;
+            }
+
+            .feature-card {
+                width: 100%;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="welcome-icon">
-            <img src="logo.png" alt="Mochi Chat Logo">
-        </div>
-        <h1>Welcome to Mochi Chat</h1>
-        <p class="subtitle">
-            Your AI-powered chat companion for PDFs and websites. To get started:
-        </p>
-        
-        <div class="steps-container">
-            <div class="step-box">
-                <span class="step-number">Step 1</span>
-                <p class="step-content">
-                    Click the button below to open extension settings and enable "Allow access to file URLs"
-                </p>
-                <button class="btn" id="openExtensions">Enable File Access</button>
-            </div>
-            <div class="step-box">
-                <span class="step-number">Step 2</span>
-                <p class="step-content">
-                    Refresh existing page to load Mochi, or open a new page
-                </p>
-            </div>
-            <div class="step-box">
-                <span class="step-number">Step 3</span>
-                <p class="step-content">
-                    Press <kbd>Command+K</kbd> (Mac) or <kbd>Ctrl+K</kbd> (Windows) to enable Mochi Chat
-                </p>
+        <div class="slideshow">
+            <div class="slides" id="slides">
+                <!-- Slide 1: Welcome Screen -->
+                <div class="slide" data-slide="0">
+                    <h1>Welcome to Mochi Chat</h1>
+                    <p class="subtitle">
+                        Your AI-powered chat companion for PDFs and websites.
+                    </p>
+                    <p class="step-content">
+                        <br>Let's get you set up in just a few steps!
+                    </p>
+                </div>
+
+                <!-- Slide 2: Activate Mochi Chat -->
+                <div class="slide" data-slide="1">
+                    <h2>Activate Mochi Chat</h2>
+                    <p class="step-content">
+                        To start chatting with Mochi, simply press <kbd>Command+K</kbd> (Mac) or <kbd>Ctrl+K</kbd> (Windows) on any webpage or PDF.
+                    </p>
+                </div>
+
+                <!-- Slide 3: Feature Preview -->
+                <div class="slide" data-slide="2">
+                    <h2>What Mochi Can Do For You</h2>
+                    <p class="step-content">
+                        Mochi Chat enhances your browsing and reading experience with powerful AI capabilities:
+                    </p>
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">📝</div>
+                            <div class="feature-title">"Summarize Key Points"</div>
+                            <div class="feature-desc">Get concise summaries of articles</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">📧</div>
+                            <div class="feature-title">"Draft an Email for..."</div>
+                            <div class="feature-desc">Create professional emails based on content</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🔍</div>
+                            <div class="feature-title">"Find X from the PDF""</div>
+                            <div class="feature-desc">Find answers to your questions instantly</div>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">💡</div>
+                            <div class="feature-title">"Explain this Concept""</div>
+                            <div class="feature-desc">Explain any topics/concepts on the page</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Slide 4: Enable File Access -->
+                <div class="slide" data-slide="3">
+                    <h2>Enable File Access & You're All Set!</h2>
+                    <p class="step-content">
+                        To chat with PDFs, Mochi needs permission to access local files. Click the button below to open extension settings and enable <br><br>"Allow access to file URLs"
+                    </p>
+                    <button class="btn" id="openExtensions">Enable File Access</button>
+                </div>
             </div>
         </div>
 
-        <p class="happy-note">Happy chatting! 🎉</p>
+        <!-- Navigation Buttons -->
+        <div class="navigation">
+            <button class="nav-btn" id="prevBtn">Previous</button>
+            <button class="nav-btn" id="nextBtn">Next</button>
+        </div>
     </div>
 
     <script src="instructions.js"></script>

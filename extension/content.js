@@ -729,6 +729,7 @@ async function enhanceScreenshot(base64Image) {
  * Capture screen without chat interface
  * Temporarily hides chat interface, captures screen, then restores state
  * Uses minimal delay to make the transition almost unnoticeable
+ * Includes explicit permission request and retry logic for reliability
  * 
  * @returns {Promise<string>} Enhanced base64 encoded screenshot
  */
@@ -744,11 +745,40 @@ async function captureScreenWithoutInterface() {
       isInterfaceVisible = false;
     }
     
-    // Minimal delay for DOM update (5ms is typically sufficient)
+    // Minimal delay for DOM update
     await new Promise(resolve => setTimeout(resolve, 2));
     
-    // Capture screen
-    const rawScreenshot = await chrome.runtime.sendMessage({ action: 'captureVisibleTab' });
+    // Solution #1: Try to explicitly request activeTab permission if available
+    try {
+      if (chrome.permissions && chrome.permissions.request) {
+        logToBackground('[Mochi-Content] Explicitly requesting activeTab permission');
+        await chrome.permissions.request({ permissions: ['activeTab'] });
+      }
+    } catch (permError) {
+      // Non-critical error, just log it and continue with capture attempt
+      logToBackground('[Mochi-Content] Permission request failed: ' + permError.message, true);
+    }
+    
+    // Solution #2: Add retry logic for screenshot capture
+    let attempts = 0;
+    let rawScreenshot = null;
+    const MAX_ATTEMPTS = 3;
+    
+    while (!rawScreenshot && attempts < MAX_ATTEMPTS) {
+      try {
+        logToBackground(`[Mochi-Content] Screenshot attempt ${attempts + 1} of ${MAX_ATTEMPTS}`);
+        rawScreenshot = await chrome.runtime.sendMessage({ action: 'captureVisibleTab' });
+        
+        if (!rawScreenshot) {
+          throw new Error('No screenshot data returned');
+        }
+      } catch (error) {
+        logToBackground(`[Mochi-Content] Screenshot attempt ${attempts + 1} failed: ${error.message}`, true);
+        // Wait longer between retries with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 100 * Math.pow(2, attempts)));
+      }
+      attempts++;
+    }
     
     // Restore interface immediately if it was visible
     if (wasVisible) {
@@ -757,7 +787,7 @@ async function captureScreenWithoutInterface() {
     }
     
     if (!rawScreenshot) {
-      throw new Error('Screenshot capture failed');
+      throw new Error('Screenshot capture failed after multiple attempts');
     }
 
     // Enhance the screenshot

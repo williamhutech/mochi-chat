@@ -102,15 +102,36 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
       
     case "captureVisibleTab":
-      chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 100 }, (dataUrl) => {
-        if (chrome.runtime.lastError) {
-          console.error('[Mochi-Background] Screenshot error:', chrome.runtime.lastError);
-          sendResponse(null);
-        } else {
-          console.log('[Mochi-Background] Screenshot captured successfully');
-          sendResponse(dataUrl);
-        }
-      });
+      try {
+        logToConsole('Processing screenshot request');
+        
+        chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 100 }, (dataUrl) => {
+          if (chrome.runtime.lastError) {
+            const errorMessage = chrome.runtime.lastError.message;
+            logToConsole(`Screenshot error: ${errorMessage}`, 'Mochi-Background', true);
+            
+            // Add detailed diagnostics for specific error types
+            if (errorMessage.includes('permission')) {
+              logToConsole('Permission issue detected. Checking permission state...', 'Mochi-Background', true);
+              
+              // Check active tab permission if possible
+              if (chrome.permissions && chrome.permissions.contains) {
+                chrome.permissions.contains({ permissions: ['activeTab'] }, (hasPermission) => {
+                  logToConsole(`activeTab permission present: ${hasPermission}`, 'Mochi-Background');
+                });
+              }
+            }
+            
+            sendResponse(null);
+          } else {
+            logToConsole('Screenshot captured successfully', 'Mochi-Background');
+            sendResponse(dataUrl);
+          }
+        });
+      } catch (error) {
+        logToConsole(`Exception in screenshot capture: ${error.message}`, 'Mochi-Background', true);
+        sendResponse(null);
+      }
       return true;
   }
   
