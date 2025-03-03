@@ -414,9 +414,6 @@ async function extractFromWebsite() {
       let current = element;
       while (current) {
         if (current.matches && current.matches(EXCLUDE_SELECTOR)) {
-          logToBackground(
-            `[Mochi-Extract] Excluding element: ${getNodePath(current)}`
-          );
           return true;
         }
         current = current.parentElement;
@@ -492,9 +489,7 @@ async function extractFromWebsite() {
       // Process a shadow host and its shadow tree
       function processShadowHost(host) {
         if (host.shadowRoot) {
-          stats.shadowDomNodes++;
-          logToBackground(`[Mochi-Extract] Processing shadow DOM in: ${getNodePath(host)}`);
-          
+          stats.shadowDomNodes++;          
           // Extract text from shadow root using similar criteria as main DOM
           const shadowContentElements = Array.from(
             host.shadowRoot.querySelectorAll('p, div, span, h1, h2, h3, h4, h5, h6, li, td, article, section')
@@ -533,12 +528,6 @@ async function extractFromWebsite() {
       for (const selector of CONTENT_SELECTORS) {
         try {
           const elements = document.querySelectorAll(selector);
-          if (elements.length > 0) {
-            logToBackground(
-              `[Mochi-Extract] Processing selector: ${selector} (Found ${elements.length} elements)`
-            );
-          }
-          
           for (const element of elements) {
             if (!isNodeProcessed(element) && isVisible(element) && !shouldExclude(element)) {
               const text = element.textContent;

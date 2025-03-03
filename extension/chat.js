@@ -353,7 +353,6 @@ async function streamOpenAIResponse(messages, model) {
             
             if (content) {
               accumulatedResponse += content;
-              logToBackground(`[Mochi-Chat] Streaming Chunk: "${content}"`);
               sendToContent({
                 action: 'updateStreamingResponse',
                 text: content,

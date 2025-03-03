@@ -429,7 +429,6 @@ function createHideButton(container) {
   // Add ResizeObserver to detect when the container changes size (extends in length)
   if (window.ResizeObserver) {
     const resizeObserver = new ResizeObserver(() => {
-      logToBackground('[Mochi-Content] Chat toggle resize detected, updating hide button position');
       updateButtonPosition();
     });
     resizeObserver.observe(container);
@@ -1324,9 +1323,7 @@ function handleStreamingUpdate(update) {
     }
     
     // Handle streaming text
-    if (update.text) {
-      logToBackground(`[Mochi-Content] Received streaming update: "${update.text.substring(0, 40)}..."`);
-      
+    if (update.text) {      
       // If this is the first chunk, clear the loading placeholder
       if (accumulatedResponse === '') {
         logToBackground('[Mochi-Content] First chunk received, clearing loading placeholder');
