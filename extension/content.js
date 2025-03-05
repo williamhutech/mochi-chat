@@ -159,6 +159,14 @@ async function createChatInterface() {
         </div>
       </div>
       <div id="mochi-output-field"></div>
+      <div id="mochi-chat-footer">
+        <div id="mochi-footer-left">
+          <a href="#" id="mochi-learn-more">This is created by AI. Learn how &gt;</a>
+        </div>
+        <div id="mochi-footer-right">
+          <a href="#" id="mochi-feedback">Feedback?</a>
+        </div>
+      </div>
     </div>
   `;
   document.body.appendChild(chatInterface);
@@ -167,6 +175,25 @@ async function createChatInterface() {
 
   document.getElementById('mochi-close-button').addEventListener('click', hideChatInterface);
   document.getElementById('mochi-expand-button').addEventListener('click', toggleExpand);
+  
+  // Footer event listeners
+  document.getElementById('mochi-learn-more').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Open the "Learn how" page in a new tab
+    chrome.runtime.sendMessage({
+      action: 'openLearnMorePage'
+    });
+  });
+  
+  document.getElementById('mochi-feedback').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Open the feedback form or page in a new tab
+    chrome.runtime.sendMessage({
+      action: 'openFeedbackPage'
+    });
+  });
 }
 
 /**
@@ -881,6 +908,12 @@ async function showChatToggle() {
  * @returns {void}
  */
 function resetUIState() {
+  // Clear the loading placeholder from output field
+  const outputField = document.getElementById('mochi-output-field');
+  if (outputField && outputField.querySelector('.mochi-loading-placeholder')) {
+    outputField.innerHTML = '';
+  }
+  
   document.getElementById('mochi-chat-input-field').focus();
 }
 
@@ -1644,6 +1677,13 @@ function cleanupCanvases(canvases) {
 //=============================================================================
 
 /**
+ * Counter to track the number of consecutive errors
+ * Used to show different error messages based on frequency
+ * @type {number}
+ */
+let errorCounter = 0;
+
+/**
  * Utility function to send logs to background script
  * Accepts multiple parameters which are concatenated to a single string
  * @param {...*} args - Log messages, with an optional final boolean flag indicating error
@@ -1669,7 +1709,45 @@ function logToBackground(...args) {
  * @returns {void}
  */
 function showError(message) {
-  showChatInterface(`<p class="mochi-error">${message}</p>`);
+  // Log the specific error for debugging but display standardized message to user
+  logToBackground(`[Mochi-Content] Error details: ${message}`, true);
+  
+  // Make sure chat interface is visible
+  showChatInterface();
+  
+  // Increment error counter
+  errorCounter++;
+  
+  // Display standardized user-friendly error message in the output field
+  const outputField = document.getElementById('mochi-output-field');
+  if (outputField) {
+    let errorMessage = '';
+    
+    // Show different message based on error count
+    if (errorCounter <= 1) {
+      errorMessage = `
+        <br>
+        <p class="mochi-error">Hmm, something didn't quite work as expected. Would you mind trying once more?</p>
+      `;
+    } else if (errorCounter == 2) {
+      errorMessage = `
+        <br>
+        <p class="mochi-error">Something is not working as expected. Drop us a note through the feedback button and we'll get it fixed!</p>
+      `;
+    } else {
+      errorMessage = `
+        <br>
+        <p class="mochi-error">So sorry about this. Let us know through the feedback button and I will get it fixed!</p>
+        <br>
+        <p class="mochi-error">- Will</p>
+      `;
+    }
+    
+    outputField.innerHTML = errorMessage;
+    
+    // Update lastResponse to preserve the error message if interface is toggled
+    lastResponse = outputField.innerHTML;
+  }
 }
 
 //=============================================================================

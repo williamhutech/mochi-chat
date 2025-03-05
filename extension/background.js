@@ -95,6 +95,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       logToConsole('Conversation history updated');
       break;
       
+    case "openLearnMorePage":
+      logToConsole('Opening Learn More page');
+      chrome.tabs.create({ url: 'https://dub.sh/Z5uBFK5' });
+      break;
+      
+    case "openFeedbackPage":
+      logToConsole('Opening Feedback page');
+      chrome.tabs.create({ url: 'https://dub.sh/0qAwW9m' });
+      break;
+      
     case "fetchLocalPDF":
       fetchLocalPDF(request.url)
         .then(sendResponse)
