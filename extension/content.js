@@ -161,7 +161,7 @@ async function createChatInterface() {
       <div id="mochi-output-field"></div>
       <div id="mochi-chat-footer">
         <div id="mochi-footer-left">
-          <a href="#" id="mochi-learn-more">This is created by AI. Learn how &gt;</a>
+          <a href="#" id="mochi-learn-more">Mochi is created by AI. Learn how &gt;</a>
         </div>
         <div id="mochi-footer-right">
           <a href="#" id="mochi-feedback">Feedback?</a>
