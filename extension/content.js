@@ -199,10 +199,11 @@ async function initializeChatInput() {
       submitButton.type = 'button';
       submitButton.disabled = true;
       submitButton.innerHTML = `
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M10 16L22 16M22 16L17 11M22 16L17 21" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
-        </svg>
-        <span class="loader"></span>
+        <img src="${chrome.runtime.getURL('submit.svg')}" width="12" height="12" 
+             style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
+        <div class="loader-wrapper">
+          <span class="loader"></span>
+        </div>
       `;
       
       /**
@@ -230,7 +231,7 @@ async function initializeChatInput() {
 
       // Send prompt when Enter is pressed
       input.addEventListener('keydown', async (e) => {
-        if (e.key === 'Enter' && document.activeElement === input && input.value.trim() && !isStreaming) {
+        if (e.key === 'Enter' && input.value.trim() && !isStreaming) {
           e.preventDefault();
           const prompt = input.value.trim();
           input.value = '';
@@ -240,11 +241,20 @@ async function initializeChatInput() {
       });
 
       // Send prompt when submit button is clicked
-      submitButton.addEventListener('click', async () => {
-        if (document.activeElement === input && input.value.trim() && !isStreaming) {
+      submitButton.addEventListener('click', async (e) => {
+        // Stop event propagation to prevent the container click from toggling the interface
+        e.stopPropagation();
+        
+        // Process prompt if there's content and not streaming
+        if (input.value.trim() && !isStreaming) {
           const prompt = input.value.trim();
           input.value = '';
           updateInputState(input, submitButton);
+          
+          // Make sure input remains focused
+          input.focus();
+          
+          // Send the prompt
           await sendPrompt(prompt);
         }
       });
@@ -307,10 +317,11 @@ async function initializeChatInputHidden() {
     submitButton.type = 'button';
     submitButton.disabled = true;
     submitButton.innerHTML = `
-      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M10 16L22 16M22 16L17 11M22 16L17 21" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
-      </svg>
-      <span class="loader"></span>
+      <img src="${chrome.runtime.getURL('submit.svg')}" width="12" height="12" 
+           style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)">
+      <div class="loader-wrapper">
+        <span class="loader"></span>
+      </div>
     `;
     
     // Setup the input events (same as regular initialization but without DOM interaction yet)
@@ -329,7 +340,7 @@ async function initializeChatInputHidden() {
     });
 
     input.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter' && document.activeElement === input && input.value.trim() && !isStreaming) {
+      if (e.key === 'Enter' && input.value.trim() && !isStreaming) {
         e.preventDefault();
         const prompt = input.value.trim();
         input.value = '';
@@ -338,11 +349,20 @@ async function initializeChatInputHidden() {
       }
     });
 
-    submitButton.addEventListener('click', async () => {
-      if (document.activeElement === input && input.value.trim() && !isStreaming) {
+    submitButton.addEventListener('click', async (e) => {
+      // Stop event propagation to prevent the container click from toggling the interface
+      e.stopPropagation();
+      
+      // Process prompt if there's content and not streaming
+      if (input.value.trim() && !isStreaming) {
         const prompt = input.value.trim();
         input.value = '';
         updateInputState(input, submitButton);
+        
+        // Make sure input remains focused
+        input.focus();
+        
+        // Send the prompt
         await sendPrompt(prompt);
       }
     });
@@ -1719,17 +1739,18 @@ async function checkIfDynamicWebApp() {
     // Dynamic score threshold is now lower to catch more web apps
     const shouldUseImageCapture = dynamicScore >= 0.35;
     
-    logToBackground(`[Mochi-Content] Dynamic detection results:
-      - Article content: ${isArticle}
-      - Dynamic loading: ${hasDynamicLoading} (weight: ${dynamicLoadingWeight})
-      - Infinite scroll: ${hasInfiniteScroll} (weight: ${infiniteScrollWeight})
-      - Rich JS interface: ${hasRichJSInterface} (weight: ${richJSInterfaceWeight})
-      - DOM complexity: ${domComplexity} (weight: ${domComplexityWeight})
-      - Content quality: ${contentQuality} (weight: ${contentQualityWeight})
-      - JS Framework: ${hasFramework} (weight: ${frameworkWeight})
-      - Dynamic score: ${dynamicScore.toFixed(2)}
-      - Required threshold: 0.35
-      - Final decision: ${shouldUseImageCapture}`);
+    // Re-use in the future; do not delete
+    // [Mochi-Content] Dynamic detection results:
+    // - Article content: ${isArticle}
+    // - Dynamic loading: ${hasDynamicLoading} (weight: ${dynamicLoadingWeight})
+    // - Infinite scroll: ${hasInfiniteScroll} (weight: ${infiniteScrollWeight})
+    // - Rich JS interface: ${hasRichJSInterface} (weight: ${richJSInterfaceWeight})
+    // - DOM complexity: ${domComplexity} (weight: ${domComplexityWeight})
+    // - Content quality: ${contentQuality} (weight: ${contentQualityWeight})
+    // - JS Framework: ${hasFramework} (weight: ${frameworkWeight})
+    // - Dynamic score: ${dynamicScore.toFixed(2)}
+    // - Required threshold: 0.35
+    // - Final decision: ${shouldUseImageCapture}
     
     // Update global isDynamic flag based on detection
     isDynamic = shouldUseImageCapture;
@@ -1834,50 +1855,54 @@ async function detectArticleContent() {
     const headingCount = document.querySelectorAll('h1, h2, h3, h4, h5, h6').length;
     const goodParagraphHeadingRatio = headingCount > 0 && paragraphCount / headingCount > 3;
     
-    // Check for presence of "comments" or "read more" text
-    const hasArticleLanguage = 
-      document.body.innerText.match(/comments|read more|related articles|share this|posted on|published|author/i) !== null;
+    // Check text formatting
+    const hasFormatting = document.querySelectorAll('strong, em, b, i, u, mark, code, pre').length > 0;
     
-    // Calculate weighted article score
-    const factors = [
-      { value: hasArticleTag, weight: 0.15 },
-      { value: hasHeadingStructure, weight: 0.1 },
-      { value: hasParagraphs, weight: 0.15 },
-      { value: hasArticleSchema, weight: 0.2 },
-      { value: hasArticleContainer, weight: 0.1 },
-      { value: hasPublicationDate, weight: 0.05 },
-      { value: hasAuthorInfo, weight: 0.05 },
-      { value: hasShareButtons, weight: 0.02 },
-      { value: hasArticleNavigation, weight: 0.03 },
-      { value: hasCommentSection, weight: 0.05 },
-      { value: hasSubstantialText, weight: 0.15 },
-      { value: goodParagraphHeadingRatio, weight: 0.1 },
-      { value: hasArticleLanguage, weight: 0.05 }
-    ];
+    // Check for semantic structure
+    const hasSemanticStructure = 
+      document.querySelectorAll('article, section, header, footer, nav, aside, main').length > 0;
     
-    const articleScore = factors.reduce((score, factor) => {
-      return score + (factor.value ? factor.weight : 0);
-    }, 0);
+    // Check for data tables
+    const hasTables = document.querySelectorAll('table').length > 0;
+    
+    // Composite article score
+    const articleScore = 
+      (hasArticleTag ? 0.2 : 0) +
+      (hasHeadingStructure ? 0.15 : 0) +
+      (hasParagraphs ? 0.15 : 0) +
+      (hasArticleSchema ? 0.1 : 0) +
+      (hasArticleContainer ? 0.1 : 0) +
+      (hasPublicationDate ? 0.05 : 0) +
+      (hasAuthorInfo ? 0.05 : 0) +
+      (hasShareButtons ? 0.02 : 0) +
+      (hasArticleNavigation ? 0.03 : 0) +
+      (hasCommentSection ? 0.05 : 0) +
+      (hasSubstantialText ? 0.15 : 0) +
+      (goodParagraphHeadingRatio ? 0.1 : 0) +
+      (hasFormatting ? 0.05 : 0) +
+      (hasSemanticStructure ? 0.05 : 0) +
+      (hasTables ? 0.05 : 0);
     
     const isArticle = articleScore >= ARTICLE_SCORE_THRESHOLD;
     
-    logToBackground(`[Mochi-Content] Article detection:
-      - Article tag: ${hasArticleTag}
-      - Heading structure: ${hasHeadingStructure}
-      - Paragraphs: ${hasParagraphs}
-      - Article schema: ${hasArticleSchema}
-      - Article container: ${hasArticleContainer}
-      - Publication date: ${hasPublicationDate}
-      - Author info: ${hasAuthorInfo}
-      - Share buttons: ${hasShareButtons}
-      - Article navigation: ${hasArticleNavigation}
-      - Comment section: ${hasCommentSection}
-      - Substantial text: ${hasSubstantialText}
-      - Paragraph-heading ratio: ${goodParagraphHeadingRatio}
-      - Article language: ${hasArticleLanguage}
-      - Article score: ${articleScore.toFixed(2)}
-      - Threshold: ${ARTICLE_SCORE_THRESHOLD}
-      - Is article: ${isArticle}`);
+    // Will be re-used in the future; keep as it is.
+    // logToBackground(`[Mochi-Content] Article detection:
+    //   - Article tag: ${hasArticleTag}
+    //   - Heading structure: ${hasHeadingStructure}
+    //   - Paragraphs: ${hasParagraphs}
+    //   - Article schema: ${hasArticleSchema}
+    //   - Article container: ${hasArticleContainer}
+    //   - Publication date: ${hasPublicationDate}
+    //   - Author info: ${hasAuthorInfo}
+    //   - Share buttons: ${hasShareButtons}
+    //   - Article navigation: ${hasArticleNavigation}
+    //   - Comment section: ${hasCommentSection}
+    //   - Substantial text: ${hasSubstantialText}
+    //   - Paragraph-heading ratio: ${goodParagraphHeadingRatio}
+    //   - Article language: ${hasFormatting}
+    //   - Article score: ${articleScore.toFixed(2)}
+    //   - Threshold: ${ARTICLE_SCORE_THRESHOLD}
+    //   - Is article: ${isArticle}`);
     
     return isArticle;
   } catch (error) {
@@ -1902,7 +1927,7 @@ async function checkForDynamicLoading() {
         script.textContent.includes('WebSocket(')
       )
     );
-    
+      
     // Check for EventSource (Server-Sent Events)
     const hasEventSource = Array.from(document.querySelectorAll('script')).some(script => 
       script.textContent && (

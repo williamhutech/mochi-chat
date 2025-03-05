@@ -123,8 +123,9 @@
  }
 
  #mochi-chat-input-container #mochi-chat-input-field::placeholder {
-   color: rgba(0, 0, 0, 0.4) !important;
-   opacity: 1 !important;
+  color: rgba(0, 0, 0, 0.5) !important;
+  opacity: 1 !important;
+  font-weight: 400 !important;
  }
 
  #mochi-chat-submit-button {
@@ -135,13 +136,14 @@
    background-color: rgba(0, 0, 0, 0.44);
    border: none;
    padding: 0;
-   position: relative;
+   position: relative; /* Creates positioning context */
    cursor: pointer;
    color: rgba(255, 255, 255, 0.9);
    display: flex;
    align-items: center;
    justify-content: center;
    transition: background-color 0.2s ease, color 0.2s ease;
+   overflow: hidden; /* Ensure content doesn't overflow the circular button */
  }
 
  #mochi-chat-input-container.has-content #mochi-chat-submit-button {
@@ -155,30 +157,73 @@
    cursor: default;
  }
 
- #mochi-chat-submit-button svg {
-   width: 32px;
-   height: 32px;
-   display: block;
+ #mochi-chat-submit-button img {
+   width: 12px;
+   height: 12px;
+   pointer-events: none;
+   filter: brightness(0) invert(1);
  }
 
  /* Loading State */
- #mochi-chat-submit-button.loading svg {
-   display: none;
- }
-
- #mochi-chat-submit-button .loader {
-   display: none;
- }
-
- #mochi-chat-submit-button.loading .loader {
-   display: inline-block;
- }
-
  #mochi-chat-submit-button.loading {
    background-color: rgb(0, 0, 0);
  }
 
- .loader {
+ #mochi-chat-submit-button.loading .loader-wrapper {
+   display: block;
+ }
+
+ #mochi-chat-submit-button.loading img {
+   display: none;
+ }
+
+ #mochi-chat-submit-button .loader-wrapper {
+   display: none;
+   position: absolute;
+   top: 50%;
+   left: 50%;
+   transform: translate(-50%, -50%);
+   width: 16px;
+   height: 16px;
+ }
+
+ #mochi-chat-submit-button .loader {
+   position: absolute;
+   top: 0;
+   left: 0;
+   width: 16px;
+   height: 16px;
+   border-radius: 50%;
+   border-top: 2px solid #FFF;
+   border-right: 2px solid transparent;
+   box-sizing: border-box;
+   animation: buttonRotation 0.5s linear infinite;
+ }
+
+ /* Global loader style - applied when not inside the submit button */
+ :not(#mochi-chat-submit-button) .loader {
+   width: 16px;
+   height: 16px;
+   border-radius: 50%;
+   display: inline-block;
+   border-top: 2px solid #FFF;
+   border-right: 2px solid transparent;
+   box-sizing: border-box;
+   animation: rotation 0.5s linear infinite;
+ }
+
+ /* Create a separate animation for the button loader */
+ @keyframes buttonRotation {
+   0% {
+     transform: rotate(0deg);
+   }
+   100% {
+     transform: rotate(360deg);
+   }
+ }
+
+ /* Global loader style - only applied when not inside the submit button */
+ :not(#mochi-chat-submit-button) > .loader {
    width: 16px;
    height: 16px;
    border-radius: 50%;
@@ -197,7 +242,7 @@
      transform: rotate(360deg);
    }
  }
- 
+
  /* -----------------------------------------------------------------------------
   * Main Chat Container
   * - Now partially transparent + backdrop blur to mimic frosted/glass effect

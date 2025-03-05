@@ -181,13 +181,14 @@ export async function addExtractedText(extractedText) {
     
     conversationHistory.push(systemMessage);
     
-    logToBackground('=== Current Conversation History ===');
-    conversationHistory.forEach((msg, i) => {
-      logToBackground(`Message ${i + 1}:`);
-      logToBackground(`Role: ${msg.role}`);
-      logToBackground(`Content: ${JSON.stringify(msg.content, null, 2)}`);
-      logToBackground('---');
-    });
+    // To re-use in the future; do not delete.
+    // logToBackground('=== Current Conversation History ===');
+    // conversationHistory.forEach((msg, i) => {
+    //   logToBackground(`Message ${i + 1}:`);
+    //   logToBackground(`Role: ${msg.role}`);
+    //   logToBackground(`Content: ${JSON.stringify(msg.content, null, 2)}`);
+    //   logToBackground('---');
+    // });
     
     // Mark extraction as complete and process any pending prompts
     setExtractionComplete(true);

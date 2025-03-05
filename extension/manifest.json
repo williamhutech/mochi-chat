@@ -13,12 +13,11 @@
   "permissions": [
     "storage",
     "activeTab",
-    "commands"
+    "commands",
+    "desktopCapture"
   ],
   "host_permissions": [
-    "http://*/*",
-    "https://*/*",
-    "file:///*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js",
@@ -67,7 +66,8 @@
         "marked.min.js",
         "dynamic-apps.js",
         "module-registry.js",
-        "types/message.js"
+        "types/message.js",
+        "submit.svg"
       ],
       "matches": ["<all_urls>"]
     }

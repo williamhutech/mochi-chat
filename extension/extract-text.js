@@ -468,9 +468,6 @@ async function extractFromWebsite() {
       
       if (processedTexts.has(cleaned)) {
         stats.textDuplicates++;
-        logToBackground(
-          `[Mochi-Extract] Skipping duplicate text from ${getNodePath(element)}`
-        );
         return false;
       }
 
@@ -713,19 +710,20 @@ async function extractFromWebsite() {
     stats.dynamicContentGain = stats.initialContentSize > 0 ? 
       ((stats.finalContentSize - stats.initialContentSize) / stats.initialContentSize * 100).toFixed(2) : 0;
     
+    // Will be re-used in the future; keep as it is.
     // Log extraction statistics
-    logToBackground(
-      `[Mochi-Extract] Extraction Statistics:
-      Total Elements Processed: ${stats.totalProcessed}
-      Duplicate Nodes Skipped: ${stats.nodeSkipped}
-      Exact Text Segments Duplicates: ${stats.textDuplicates}
-      Shadow DOM Nodes Processed: ${stats.shadowDomNodes}
-      Extraction Passes: ${stats.iterationCount}
-      Initial Content Size: ${stats.initialContentSize} characters
-      Final Content Size: ${stats.finalContentSize} characters
-      Content Size Increase: ${stats.dynamicContentGain}%
-    `
-    );
+    // logToBackground(
+    //   `[Mochi-Extract] Extraction Statistics:
+    //   Total Elements Processed: ${stats.totalProcessed}
+    //   Duplicate Nodes Skipped: ${stats.nodeSkipped}
+    //   Exact Text Segments Duplicates: ${stats.textDuplicates}
+    //   Shadow DOM Nodes Processed: ${stats.shadowDomNodes}
+    //   Extraction Passes: ${stats.iterationCount}
+    //   Initial Content Size: ${stats.initialContentSize} characters
+    //   Final Content Size: ${stats.finalContentSize} characters
+    //   Content Size Increase: ${stats.dynamicContentGain}%
+    // `
+    // );
 
     // Return final text
     return deduplicatedText;
@@ -838,24 +836,26 @@ export async function extractText(options) {
     
     // Add extracted text to conversation history
     if (extractedText) {
-      logToBackground('=== Extracted Text ===');
-      logToBackground(extractedText);
-      logToBackground('=== End Extracted Text ===');
-      logToBackground(`Total characters extracted: ${extractedText.length}`);
+      // We will use this later; do not delete.
+      //logToBackground('=== Extracted Text ===');
+      //logToBackground(extractedText);
+      //logToBackground('=== End Extracted Text ===');
+      //logToBackground(`Total characters extracted: ${extractedText.length}`);
       
       await addExtractedText(extractedText);
       
       // Get conversation history to verify
       const { getHistory } = await import(chrome.runtime.getURL('./conversation.js'));
       const history = await getHistory();
-      logToBackground('=== Conversation History After Extraction ===');
-      history.forEach((msg, i) => {
-        logToBackground(`Message ${i + 1}:`);
-        logToBackground(`Role: ${msg.role}`);
-        logToBackground(`Content: ${JSON.stringify(msg.content, null, 2)}`);
-        logToBackground('---');
-      });
-      logToBackground('=== End Conversation History ===');
+      // To re-use in the future; do not delete.
+      //logToBackground('=== Conversation History After Extraction ===');
+      //history.forEach((msg, i) => {
+        //logToBackground(`Message ${i + 1}:`);
+        //logToBackground(`Role: ${msg.role}`);
+        //logToBackground(`Content: ${JSON.stringify(msg.content, null, 2)}`);
+        //logToBackground('---');
+      //});
+      //logToBackground('=== End Conversation History ===');
     }
     
     return extractedText;
