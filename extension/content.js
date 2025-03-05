@@ -807,21 +807,22 @@ async function showChatToggle() {
     const notification = document.createElement('div');
     notification.style.position = 'fixed';
     notification.style.bottom = '20px';
-    notification.style.right = '20px';
-    notification.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-    notification.style.color = 'white';
-    notification.style.padding = '10px 15px';
-    notification.style.borderRadius = '5px';
+    notification.style.left = '20px';
+    notification.style.backgroundColor = 'rgba(241, 241, 241, 0.68)';
+    notification.style.backdropFilter = 'blur(24px)';
+    notification.style.color = 'rgba(0, 0, 0, 0.8)';
+    notification.style.padding = '12px 15px';
+    notification.style.borderRadius = '18px';
     notification.style.zIndex = '9999999';
-    notification.style.fontFamily = 'Arial, sans-serif';
-    notification.style.fontSize = '14px';
+    notification.style.fontFamily = "'Noto Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+    notification.style.fontSize = '13px';
     notification.style.maxWidth = '300px';
-    notification.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.3)';
+    notification.style.boxShadow = '0 1px 2px 0 rgba(0, 0, 0, 0.04)';
     notification.innerHTML = `
-      <div style="margin-bottom: 10px;">Chat toggle was hidden for ${currentDomain}.</div>
+      <div style="margin-bottom: 10px; font-weight: 400; color: rgba(0, 0, 0, 0.6);">Chat toggle was hidden for ${currentDomain}.</div>
       <div style="display: flex; justify-content: flex-end; gap: 10px;">
-        <button id="mochi-keep-hidden" style="padding: 5px 10px; background: #555; border: none; color: white; border-radius: 3px; cursor: pointer;">Keep Hidden</button>
-        <button id="mochi-show-always" style="padding: 5px 10px; background: #4285f4; border: none; color: white; border-radius: 3px; cursor: pointer;">Show Always</button>
+        <button id="mochi-keep-hidden" style="padding: 8px 12px; background: rgba(0, 0, 0, 0.44); border: none; color: white; border-radius: 24px; cursor: pointer; font-size: 12px; font-weight: 400;">Keep Hidden</button>
+        <button id="mochi-show-always" style="padding: 8px 12px; background: rgb(0, 0, 0); border: none; color: white; border-radius: 24px; cursor: pointer; font-size: 12px; font-weight: 400;">Show Always</button>
       </div>
     `;
     document.body.appendChild(notification);
