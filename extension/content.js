@@ -180,19 +180,15 @@ async function createChatInterface() {
   document.getElementById('mochi-learn-more').addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // Open the "Learn how" page in a new tab
-    chrome.runtime.sendMessage({
-      action: 'openLearnMorePage'
-    });
+    // Open the "Learn how" page in a new tab directly
+    window.open('https://dub.sh/Z5uBFK5', '_blank');
   });
   
   document.getElementById('mochi-feedback').addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // Open the feedback form or page in a new tab
-    chrome.runtime.sendMessage({
-      action: 'openFeedbackPage'
-    });
+    // Open the feedback form or page in a new tab directly
+    window.open('https://dub.sh/0qAwW9m', '_blank');
   });
 }
 
