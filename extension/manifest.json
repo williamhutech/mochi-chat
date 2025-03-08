@@ -13,8 +13,7 @@
   "permissions": [
     "storage",
     "activeTab",
-    "commands",
-    "desktopCapture"
+    "commands"
   ],
   "host_permissions": [
     "<all_urls>"
